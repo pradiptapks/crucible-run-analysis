@@ -1,228 +1,311 @@
-# CLI Reference -- analyze-run.py
+# CLI Reference
 
-## Synopsis
+## Skill Invocation
+
+The primary interface is the Claude skill:
 
 ```
-analyze-run.py --run-dir PATH [OPTIONS]
+/crucible-analysis:analyze-run <target> [options]
 ```
 
-## Required Arguments
+### Target Resolution
+
+| Target | Description | Example |
+|--------|-------------|---------|
+| `latest` | Resolves symlink `/var/lib/crucible/run/latest` | `/crucible-analysis:analyze-run latest` |
+| Partial UUID | Matches run directory by UUID prefix | `/crucible-analysis:analyze-run 8ab97461` |
+| Full path | Uses the absolute path directly | `/crucible-analysis:analyze-run /var/lib/crucible/run/trafficgen--2026-06-05_...` |
+
+### Skill Options
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| `--profile NAME` | Override auto-detected profile | `/crucible-analysis:analyze-run latest --profile trafficgen/stl-sriov` |
+| `--profile /path` | Use a custom profiles directory | `/crucible-analysis:analyze-run latest --profile /home/user/my-profiles` |
+| `--compare TARGET` | Compare against another run | `/crucible-analysis:analyze-run latest --compare 079069ba` |
+| `--section LIST` | Limit output sections | `/crucible-analysis:analyze-run latest --section overview,metrics,alerts` |
+
+---
+
+## Engine CLI -- analyze-run.py
+
+### Synopsis
+
+```
+python3 bin/analyze-run.py --run-dir PATH [OPTIONS]
+```
+
+### Required Arguments
 
 | Argument | Description |
 |----------|-------------|
-| `--run-dir PATH` | Path to a crucible run directory (e.g., `/var/lib/crucible/run/latest`). The directory must contain valid run data including `run/iteration*/sample*/result-summary.json` and associated metric data. |
+| `--run-dir PATH` | Path to a crucible run directory (e.g., `/var/lib/crucible/run/latest`) |
 
-## Options
+### Options
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--profiles-dir PATH` | User-defined profiles directory. Must be an absolute path. When specified, this directory is searched first before falling back to the bundled profiles directory. | Bundled profiles at `<script-dir>/../profiles` |
-| `--profile NAME` | Override auto-selected profile. Specify as `benchmark/variant` (e.g., `trafficgen/astf-sriov`). Bypasses auto-detection entirely. | Auto-detected from run metadata |
-| `--format FORMAT` | Output format. Accepted values: `markdown`, `json`, `summary`. | `markdown` |
-| `--section SECTION` | Comma-separated list of sections to include in the output. Accepted values: `overview`, `metrics`, `alerts`, `patterns`, `tools`, `recommendations`, `all`. | `all` |
-| `--compare PATH` | Path to another run directory for comparison. Produces a delta analysis showing regressions and improvements between the two runs. | None |
-| `--top N` | Limit per-instance tables to the top N entries, sorted by value in descending order. | `10` |
-| `--no-color` | Disable status indicators (warning/critical markers) in markdown output. Useful when piping to tools that do not support inline markers. | Indicators enabled |
-| `--verbose` | Show progress messages on stderr during analysis. | Off |
-| `--quiet` | Suppress all stderr output. This is the default behavior when invoked from the crucible skill. | Off |
+| `--profiles-dir PATH` | User-defined profiles directory (absolute path, searched first) | Bundled `<script-dir>/../profiles` |
+| `--profile NAME` | Override auto-selected profile (e.g., `trafficgen/astf-sriov`) | Auto-detected |
+| `--format FORMAT` | Output format: `markdown`, `json`, `summary` | `markdown` |
+| `--section SECTION` | Comma-separated sections: `overview`, `metrics`, `alerts`, `patterns`, `tools`, `recommendations`, `all` | `all` |
+| `--compare PATH` | Compare against another run directory | None |
+| `--top N` | Limit per-instance tables to top N entries | `10` |
+| `--no-color` | Disable status indicators in output | Enabled |
+| `--verbose` | Show progress messages on stderr | Off |
+| `--quiet` | Suppress all stderr output | Off |
 
-## Exit Codes
+### Exit Codes
 
 | Code | Meaning |
 |------|---------|
-| `0` | Success -- full analysis completed with all requested sections populated. |
-| `1` | Error -- invalid path, missing run data, profile not found, or required dependency (PyYAML) not installed. |
-| `2` | Partial success -- some metrics were unavailable but the report was still generated with available data. |
+| `0` | Success -- analysis completed, at least one primary metric has data |
+| `1` | Error -- invalid path, missing data, profile not found, PyYAML not installed |
+| `2` | Partial -- no benchmark measurement data found but report was still generated |
 
-## Environment Variables
+### Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `CRUCIBLE_HOME` | Crucible installation directory. Used to locate bundled profiles when `--profiles-dir` is not specified. | `/opt/crucible` |
+| `CRUCIBLE_HOME` | Crucible installation directory | `/opt/crucible` |
+
+---
 
 ## Profile Resolution Order
 
-The engine resolves which profile(s) to apply using the following precedence:
+1. `--profiles-dir /absolute/path` (user-defined directory)
+2. `--profile NAME` (explicit override within profiles directory)
+3. Auto-detection via run tags + tool presence
+4. Fallback: `_base.yaml` only
 
-1. **`--profiles-dir /absolute/path`** -- If provided, this directory is searched first for matching profile YAML files.
-2. **`--profile NAME`** -- If provided, the named profile is loaded directly, bypassing auto-detection.
-3. **Auto-detection** -- The engine inspects run tags (e.g., `trafficgen_backend`) and the set of tools present in the run to select the best-matching profile automatically.
-4. **Fallback** -- If no profile matches, only `_base.yaml` is applied, providing generic metric extraction without benchmark-specific thresholds or alert rules.
+---
 
-## Examples
+## Examples by Benchmark
 
-### Analyze latest run (auto-detect profile)
+### trafficgen -- ASTF + OVS-DPDK
 
-```bash
-python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/latest
+Auto-detects from tag `trafficgen_backend=trex-astf` and `ovs` in tools. Uses profile `trafficgen/astf-ovsdpdk`.
+
+```
+/crucible-analysis:analyze-run latest
 ```
 
-### Analyze specific run with JSON output
-
 ```bash
-python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/trafficgen--2026-06-05_06:37:33_UTC--8ab97461-5b1b-45bf-a0b6-ac0d0b99e8ba --format json
+python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/trafficgen--2026-06-05_06:37:33_UTC--8ab97461-... --format markdown
 ```
 
-### Analyze with explicit profile override
+### trafficgen -- ASTF + SR-IOV
 
-```bash
-python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/latest --profile trafficgen/stl-sriov
+Auto-detects from tag `trafficgen_backend=trex-astf` and absence of `ovs`. Uses profile `trafficgen/astf-sriov`.
+
+```
+/crucible-analysis:analyze-run latest --profile trafficgen/astf-sriov
 ```
 
-### Use user-defined profiles directory
-
 ```bash
-python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/latest --profiles-dir /home/user/my-profiles
+python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/latest --profile trafficgen/astf-sriov
 ```
 
-### Compare two runs for regression detection
+### trafficgen -- STL (trex-txrx-profile) + OVS-DPDK
+
+Auto-detects from tag `trafficgen_backend=trex-txrx-profile` and `ovs` in tools. Uses profile `trafficgen/stl-ovsdpdk` with profiler correlations enabled.
+
+```
+/crucible-analysis:analyze-run 8ab97461
+```
+
+```bash
+python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/trafficgen--2026-06-05_12:00:00_UTC--... --format markdown
+```
+
+### trafficgen -- STL (trex-txrx) + SR-IOV
+
+Auto-detects from tag `trafficgen_backend=trex-txrx` and absence of `ovs`. Uses profile `trafficgen/stl-sriov` without profiler time-series (profiler only exists in trex-txrx-profile mode).
+
+```
+/crucible-analysis:analyze-run latest
+```
+
+```bash
+python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/latest --format markdown
+```
+
+### fio -- Random I/O (Future)
+
+Will auto-detect from benchmark name `fio` and run tags indicating random I/O workload.
+
+```
+/crucible-analysis:analyze-run latest --profile fio/random-io
+```
+
+```bash
+python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/fio--2026-07-01_10:00:00_UTC--... --profile fio/random-io
+```
+
+### iperf -- TCP Throughput (Future)
+
+Will auto-detect from benchmark name `iperf` and TCP protocol tags.
+
+```
+/crucible-analysis:analyze-run latest --profile iperf/tcp-throughput
+```
+
+```bash
+python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/iperf--2026-07-01_10:00:00_UTC--... --profile iperf/tcp-throughput
+```
+
+### uperf -- Latency/Throughput (Future)
+
+Will auto-detect from benchmark name `uperf` and workload profile tags.
+
+```
+/crucible-analysis:analyze-run latest --profile uperf/latency-throughput
+```
+
+```bash
+python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/uperf--2026-07-01_10:00:00_UTC--... --profile uperf/latency-throughput
+```
+
+### cyclictest -- Real-Time Latency (Future)
+
+Will auto-detect from benchmark name `cyclictest`.
+
+```
+/crucible-analysis:analyze-run latest --profile cyclictest/realtime-latency
+```
+
+```bash
+python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/cyclictest--2026-07-01_10:00:00_UTC--... --profile cyclictest/realtime-latency
+```
+
+### ilab -- Training Throughput (Future)
+
+Will auto-detect from benchmark name `ilab` with nvidia GPU tool data.
+
+```
+/crucible-analysis:analyze-run latest --profile ilab/training-throughput
+```
+
+```bash
+python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/ilab--2026-07-01_10:00:00_UTC--... --profile ilab/training-throughput
+```
+
+### pytorch -- Inference Latency (Future)
+
+Will auto-detect from benchmark name `pytorch`.
+
+```
+/crucible-analysis:analyze-run latest --profile pytorch/inference-latency
+```
+
+```bash
+python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/pytorch--2026-07-01_10:00:00_UTC--... --profile pytorch/inference-latency
+```
+
+---
+
+## Comparison Examples
+
+### Compare two trafficgen runs
+
+```
+/crucible-analysis:analyze-run latest --compare 079069ba
+```
 
 ```bash
 python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/latest \
-    --compare /var/lib/crucible/run/trafficgen--2026-06-04_10:00:00_UTC--abc12345-...
+    --compare /var/lib/crucible/run/trafficgen--2026-06-04_10:00:00_UTC--079069ba-...
 ```
 
-### Only show alerts and patterns
+### Compare with section filtering
+
+```
+/crucible-analysis:analyze-run latest --compare 079069ba --section overview,metrics
+```
 
 ```bash
-python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/latest --section alerts,patterns
+python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/latest \
+    --compare /var/lib/crucible/run/trafficgen--2026-06-04_10:00:00_UTC--079069ba-... \
+    --section overview,metrics
 ```
 
-### Quick summary for scripting
-
-```bash
-python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/latest --format summary
-```
-
-### Silent mode for skill invocation
-
-```bash
-python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/latest --format markdown --quiet
-```
+---
 
 ## Output Format Specifications
 
-### Markdown Format
+### Markdown Format (default)
 
-The markdown output is organized into the following sections:
+Sections produced (omitted when empty):
 
-- **Run Overview** -- Run ID, benchmark name, start/end timestamps, duration, tags, and iteration/sample counts.
-- **Primary Metrics** -- A table of the benchmark's primary performance metrics with columns for metric name, value, unit, and status (OK/WARN/CRITICAL). Per-instance sub-tables are included when multiple instances exist, limited by `--top`.
-- **Alerts** -- Threshold violations and anomalies grouped by the tool that reported them. Each alert includes severity, metric name, observed value, threshold, and a short description.
-- **Detected Patterns** -- Behavioral patterns identified across the run, such as throughput degradation over time, latency spikes correlated with CPU events, or steady-state detection results.
-- **Tool Summaries** -- Per-tool summaries for each data collection tool present in the run (e.g., mpstat, sar, ovs, profiler). Includes key statistics and notable observations.
-- **Recommendations** -- Actionable tuning or investigation suggestions derived from the alerts and patterns. Each recommendation references the evidence that triggered it.
+| Section | Content |
+|---------|---------|
+| **Run Overview** | Benchmark, profile, timestamp, scenario, DUT, tools, mode, duration |
+| **Primary Metrics** | Table: Metric, Value, Status (OK/WARN/CRITICAL) |
+| **Alerts** | Threshold violations grouped by severity and tool |
+| **Detected Patterns** | Cross-tool anomaly patterns with severity and recommendations |
+| **Tool Summary** | Per-tool metric tables (top N instances) |
+| **Comparison** | Side-by-side delta table (when --compare used) |
+| **Recommendations** | Prioritized actionable items from patterns + critical alerts |
 
 ### JSON Format
-
-The JSON output follows this schema:
 
 ```json
 {
   "run_info": {
-    "run_id": "string",
-    "benchmark": "string",
+    "benchmark": "trafficgen",
+    "uuid": "8ab97461-...",
+    "timestamp": "2026-06-05_06:37:33_UTC",
     "tags": {},
-    "start_time": "ISO-8601",
-    "end_time": "ISO-8601",
-    "iterations": 0,
-    "samples": 0
+    "tools": ["sysstat", "procstat", "ovs", "dpdk"],
+    "mode": "astf",
+    "duration_ms": 76751
   },
+  "profile_name": "astf-ovsdpdk",
   "primary_metrics": [
-    {
-      "name": "string",
-      "value": 0.0,
-      "unit": "string",
-      "status": "ok|warn|critical",
-      "instances": []
-    }
+    {"label": "Connections/sec", "value": 847706.8, "status": "OK", "source": "trafficgen", "type": "connections-per-second"}
   ],
   "alerts": [
-    {
-      "severity": "warning|critical",
-      "tool": "string",
-      "metric": "string",
-      "observed": 0.0,
-      "threshold": 0.0,
-      "description": "string"
-    }
+    {"severity": "CRITICAL", "tool": "dpdk", "label": "DPDK RX Missed/sec", "group": "device=0000.3b.00.0", "value": 19511174, "detail": "..."}
   ],
-  "patterns": [
-    {
-      "type": "string",
-      "description": "string",
-      "evidence": {}
-    }
+  "detected_patterns": [
+    {"name": "High Retransmission Rate", "severity": "warning", "description": "...", "recommendation": "..."}
   ],
-  "tool_summaries": {
-    "tool_name": {
-      "metrics_collected": 0,
-      "alerts": 0,
-      "summary": "string"
-    }
-  },
+  "tool_correlation_results": [],
   "recommendations": [
-    {
-      "priority": "high|medium|low",
-      "action": "string",
-      "evidence": "string"
-    }
-  ]
+    {"priority": "HIGH", "action": "..."}
+  ],
+  "comparison": null
 }
 ```
 
 ### Summary Format
 
-A single line suitable for scripting and dashboards:
+Single line for scripting:
 
 ```
-STATUS: benchmark (run-id-short) primary-metric=value [delta if compare]
+STATUS: benchmark (run-id-short) primary-metric=value [delta%]
 ```
 
-Where `STATUS` is one of:
+Where STATUS is `OK`, `WARN`, or `CRITICAL`.
 
-- **OK** -- All metrics within acceptable thresholds.
-- **WARN** -- One or more metrics exceeded warning thresholds but no critical violations.
-- **CRITICAL** -- One or more metrics exceeded critical thresholds.
+Example:
+```
+OK: trafficgen (8ab97461) Connections/sec=847,706.8 Retransmit %=0.0133
+```
 
-When `--compare` is used, the delta is appended showing the percentage change from the baseline run.
+---
 
-## Trafficgen Mode Examples
+## User-Defined Profiles
 
-### trex-astf run (OVS-DPDK)
+Create custom profiles for site-specific thresholds or new benchmarks:
 
-When the run contains the tag `trafficgen_backend=trex-astf` and the tool set includes `ovs`, the engine auto-selects the `trafficgen/astf-ovsdpdk` profile. This profile defines:
-
-- Primary metrics: TCP transaction rate, TCP connection rate, TCP latency
-- OVS-specific tool analysis: datapath flow counts, upcall rates, PMD CPU utilization
-- Alert thresholds tuned for ASTF workloads over OVS-DPDK bridges
+```
+/crucible-analysis:analyze-run latest --profile /home/user/my-profiles/custom-astf.yaml
+```
 
 ```bash
-python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/trafficgen--2026-06-05_06:37:33_UTC--8ab97461-...
+python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/latest \
+    --profiles-dir /home/user/my-profiles
 ```
 
-Auto-detection logic: tag `trafficgen_backend=trex-astf` + tool `ovs` present --> profile `trafficgen/astf-ovsdpdk`.
-
-### trex-txrx-profile run (SR-IOV)
-
-When the run contains a tag indicating `trex-txrx-profile` as the backend and `ovs` is absent from the tool set, the engine auto-selects the `trafficgen/stl-sriov` profile. This profile defines:
-
-- Primary metrics: throughput (Mpps), packet loss rate, latency percentiles
-- SR-IOV-specific analysis: per-flow distribution, NIC queue balance
-- Profiler time-series data integration when profiler tool data is available, providing CPU cycle breakdowns correlated with traffic phases
-
-```bash
-python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/trafficgen--2026-06-05_12:00:00_UTC--...
-```
-
-Auto-detection logic: tag `trafficgen_backend=trex-txrx-profile` + no `ovs` tool --> profile `trafficgen/stl-sriov`.
-
-### trex-txrx run
-
-Runs using the `trex-txrx` backend follow the same STL profile selection as `trex-txrx-profile`. The engine auto-selects `trafficgen/stl-sriov` (or `trafficgen/stl-ovsdpdk` if `ovs` is present). The difference from `trex-txrx-profile` is that profiler time-series data is not available, so CPU cycle breakdowns and traffic-phase correlation sections are omitted from the report.
-
-```bash
-python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/trafficgen--2026-06-05_14:00:00_UTC--...
-```
-
-Auto-detection logic: tag `trafficgen_backend=trex-txrx` + no `ovs` tool --> profile `trafficgen/stl-sriov` (without profiler sections).
+The engine searches the user directory first, falling back to bundled profiles if no match is found.
