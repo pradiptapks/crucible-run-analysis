@@ -6,10 +6,11 @@ Profile-driven benchmark run analysis for the [crucible](https://github.com/perf
 
 This project is a crucible subproject managed by `crucible update`. Once registered in `config/repos.json`, it is automatically cloned to `subprojects/core/crucible-run-analysis`.
 
-Register the Claude plugin:
+Register the Claude plugin marketplace and install the plugin:
 
 ```bash
 claude plugin marketplace add ${CRUCIBLE_HOME}/subprojects/core/crucible-run-analysis
+claude plugin install crucible-analysis@crucible-run-analysis
 ```
 
 ## Usage

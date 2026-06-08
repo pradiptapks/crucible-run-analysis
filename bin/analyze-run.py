@@ -1621,10 +1621,12 @@ def main():
                 log_warn("Comparison analysis returned no results")
                 had_partial_failure = True
 
-    for m in analysis.get("primary_metrics", []):
-        if m["status"] == STATUS_NO_DATA:
-            had_partial_failure = True
-            break
+    has_any_data = any(
+        m["status"] != STATUS_NO_DATA
+        for m in analysis.get("primary_metrics", [])
+    )
+    if not has_any_data and analysis.get("primary_metrics"):
+        had_partial_failure = True
 
     if args.format == "markdown":
         output = format_markdown(analysis, args.top, args.no_color, sections)

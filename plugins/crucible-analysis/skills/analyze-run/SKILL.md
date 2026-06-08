@@ -29,9 +29,10 @@ Arguments: $ARGUMENTS
    ```
    If the user provided an absolute path for --profile that looks like a directory, pass it as `--profiles-dir` instead.
 
-3. Display the stdout output verbatim as the response. The engine produces pre-formatted markdown — do not parse, reformat, or add additional structure.
-
-4. If the script returns a non-zero exit code or the output contains an `"error"` field in JSON, display the error message and suggest:
-   - Check that the run directory exists and contains valid data
-   - Run `crucible ls` to see available runs
-   - Check that PyYAML is installed (`dnf install python3-pyyaml`)
+3. Display the stdout output verbatim as the response. The engine produces pre-formatted markdown — do not parse, reformat, or add additional structure. Exit codes:
+   - **Exit 0**: Success — display output as-is
+   - **Exit 2**: Partial — no benchmark measurement data found, but report was still generated. Display the output and note that measurement data may not yet be available for this run.
+   - **Exit 1**: Error — display the error message and suggest:
+     - Check that the run directory exists and contains valid data
+     - Run `crucible ls` to see available runs
+     - Check that PyYAML is installed (`dnf install python3-pyyaml`)
