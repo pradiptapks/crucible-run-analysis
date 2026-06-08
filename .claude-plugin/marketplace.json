@@ -1,0 +1,14 @@
+{
+    "name": "crucible-run-analysis",
+    "description": "Profile-driven benchmark run analysis for the crucible performance testing framework",
+    "owner": {
+        "name": "perftool-incubator"
+    },
+    "plugins": [
+        {
+            "name": "crucible-analysis",
+            "description": "Profile-driven benchmark run analysis with trafficgen STL/ASTF coverage across OVS-DPDK and SR-IOV",
+            "source": "./plugins/crucible-analysis"
+        }
+    ]
+}
