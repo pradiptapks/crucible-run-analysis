@@ -1,5 +1,9 @@
 ---
 description: Analyze a crucible benchmark run — summarize results, detect anomalies, correlate tool metrics
+allowedTools:
+  - Bash(readlink *)
+  - Bash(ls *)
+  - Bash(python3 *)
 ---
 
 Analyze a crucible benchmark run using profile-driven analysis. Extracts primary benchmark metrics, evaluates tool correlations, and detects cross-tool anomaly patterns.
