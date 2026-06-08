@@ -1,0 +1,455 @@
+name: "TrafficGen STL + OVS-DPDK"
+benchmark: "trafficgen"
+version: 2
+extends: "_base"
+
+match:
+  tags:
+    trafficgen_backend: ["trex-txrx", "trex-txrx-profile"]
+  tools_present: ["ovs", "dpdk"]
+  tools_absent: []
+
+primary_metrics:
+  - source: "trafficgen"
+    type: "rx-pps"
+    label: "RX Packets/sec"
+    class: "throughput"
+    thresholds: {}
+
+  - source: "trafficgen"
+    type: "tx-pps"
+    label: "TX Packets/sec"
+    class: "throughput"
+    thresholds: {}
+
+  - source: "trafficgen"
+    type: "l2-rx-bps"
+    label: "L2 RX Throughput (bps)"
+    class: "throughput"
+    thresholds: {}
+
+  - source: "trafficgen"
+    type: "l2-tx-bps"
+    label: "L2 TX Throughput (bps)"
+    class: "throughput"
+    thresholds: {}
+
+  - source: "trafficgen"
+    type: "l1-rx-bps"
+    label: "L1 RX Throughput (bps)"
+    class: "throughput"
+    thresholds: {}
+
+  - source: "trafficgen"
+    type: "l1-tx-bps"
+    label: "L1 TX Throughput (bps)"
+    class: "throughput"
+    thresholds: {}
+
+  - source: "trafficgen"
+    type: "lost-rx-pps"
+    label: "Lost RX Packets/sec"
+    class: "throughput"
+    thresholds:
+      warn_above: 0
+      critical_above: 1000
+
+  - source: "trafficgen"
+    type: "max-roundtrip-usec"
+    label: "Max Round-Trip (usec)"
+    class: "count"
+    thresholds:
+      warn_above: 500
+      critical_above: 2000
+
+  - source: "trafficgen"
+    type: "mean-roundtrip-usec"
+    label: "Mean Round-Trip (usec)"
+    class: "count"
+    thresholds:
+      warn_above: 200
+      critical_above: 1000
+
+tool_correlations:
+  # ---- DPDK NIC telemetry ----
+  - tool: "dpdk"
+    source: "dpdk"
+    condition: "tool_present"
+    metrics:
+      - type: "rx-missed-sec"
+        label: "DPDK RX Missed/sec"
+        aggregation: "sum"
+        filter:
+          names: ["device"]
+        thresholds:
+          warn_above: 100
+          critical_above: 1000
+
+      - type: "rx-pps"
+        label: "DPDK RX PPS"
+        aggregation: "per_instance"
+        filter:
+          names: ["device"]
+        thresholds: {}
+
+      - type: "tx-pps"
+        label: "DPDK TX PPS"
+        aggregation: "per_instance"
+        filter:
+          names: ["device"]
+        thresholds: {}
+
+      - type: "rx-Gbps"
+        label: "DPDK RX Gbps"
+        aggregation: "per_instance"
+        filter:
+          names: ["device"]
+        thresholds: {}
+
+      - type: "tx-Gbps"
+        label: "DPDK TX Gbps"
+        aggregation: "per_instance"
+        filter:
+          names: ["device"]
+        thresholds: {}
+
+      - type: "mempool-used-pct"
+        label: "DPDK Mempool Used %"
+        aggregation: "max"
+        filter:
+          names: ["mempool_name"]
+        thresholds:
+          warn_above: 80
+          critical_above: 95
+
+  # ---- OVS PMD thread performance ----
+  - tool: "ovs"
+    source: "ovs-pmd"
+    condition: "tool_present"
+    metrics:
+      - type: "pmd-busy"
+        label: "OVS PMD Busy"
+        aggregation: "per_instance"
+        filter:
+          names: ["core", "id"]
+        thresholds:
+          warn_above: 0.90
+          critical_above: 0.98
+
+      - type: "kpps"
+        label: "OVS PMD kpps"
+        aggregation: "per_instance"
+        filter:
+          names: ["core", "direction", "id"]
+        thresholds: {}
+
+      - type: "datapath-hits-sec"
+        label: "Datapath Hits/sec"
+        aggregation: "per_instance"
+        filter:
+          names: ["dp"]
+        thresholds: {}
+
+  # ---- OVS datapath statistics ----
+  - tool: "ovs"
+    source: "ovs-dpctl"
+    condition: "tool_present"
+    metrics:
+      - type: "lookups-sec"
+        label: "Datapath Lookups/sec"
+        aggregation: "per_instance"
+        filter:
+          names: ["action"]
+        thresholds: {}
+
+      - type: "flows-count"
+        label: "Datapath Flow Count"
+        aggregation: "mean"
+        filter:
+          names: ["interface"]
+        thresholds: {}
+
+      - type: "masks-sec"
+        label: "Masks/sec"
+        aggregation: "per_instance"
+        filter:
+          names: ["action"]
+        thresholds: {}
+
+  # ---- OVS port counters ----
+  - tool: "ovs"
+    source: "ovs-ofctl"
+    condition: "tool_present"
+    metrics:
+      - type: "Gbps"
+        label: "OVS Port Gbps"
+        aggregation: "per_instance"
+        filter:
+          names: ["bridge", "interface", "direction"]
+        thresholds: {}
+
+      - type: "packets-sec"
+        label: "OVS Port PPS"
+        aggregation: "per_instance"
+        filter:
+          names: ["bridge", "interface", "direction"]
+        thresholds: {}
+
+      - type: "errors-sec"
+        label: "OVS Port Errors/sec"
+        aggregation: "sum"
+        filter:
+          names: ["bridge", "interface", "direction"]
+        thresholds:
+          warn_above: 100
+
+  # ---- OVS upcalls ----
+  - tool: "ovs"
+    source: "ovs-appctl"
+    condition: "tool_present"
+    metrics:
+      - type: "upcall-flow"
+        label: "Upcall Flow Count"
+        aggregation: "mean"
+        filter:
+          names: ["interface"]
+        thresholds:
+          warn_above: 1000
+
+      - type: "mem-show"
+        label: "OVS Memory"
+        aggregation: "per_instance"
+        filter:
+          names: ["source"]
+        thresholds: {}
+
+  # ---- ethtool NIC counters ----
+  - tool: "ethtool"
+    source: "ethtool"
+    condition: "tool_present"
+    metrics:
+      - type: "packets-sec"
+        label: "NIC Packets/sec"
+        aggregation: "per_instance"
+        filter:
+          names: ["interface", "direction"]
+        thresholds: {}
+
+      - type: "errors-sec"
+        label: "NIC Errors/sec"
+        aggregation: "sum"
+        filter:
+          names: ["interface", "direction"]
+        thresholds:
+          warn_above: 100
+
+      - type: "dropped-sec"
+        label: "NIC Dropped/sec"
+        aggregation: "sum"
+        filter:
+          names: ["interface", "direction"]
+        thresholds:
+          warn_above: 0
+          critical_above: 100
+
+  # ---- ebpf-dpdk PMD profiling ----
+  - tool: "ebpf-dpdk"
+    source: "ebpf-dpdk"
+    condition: "tool_present"
+    metrics:
+      - type: "top-function-pct"
+        label: "PMD Top Function %"
+        aggregation: "max"
+        filter:
+          names: ["function"]
+        thresholds: {}
+
+      - type: "perf-samples"
+        label: "Perf Samples"
+        aggregation: "sum"
+        filter:
+          names: []
+        thresholds: {}
+
+profiler_correlations:
+  - source: "trafficgen-trex-profiler"
+    condition: "source_present"
+    metrics:
+      - type: "per-core-Gbps"
+        label: "TRex Per-Core Gbps"
+        aggregation: "mean"
+        filter:
+          names: []
+        thresholds: {}
+
+      - type: "tx-cpu-util"
+        label: "TRex TX CPU Util %"
+        aggregation: "mean"
+        filter:
+          names: []
+        thresholds:
+          warn_above: 80
+          critical_above: 95
+
+      - type: "rx-cpu-util"
+        label: "TRex RX CPU Util %"
+        aggregation: "mean"
+        filter:
+          names: []
+        thresholds:
+          warn_above: 80
+
+      - type: "queue-full-per-second"
+        label: "TRex Queue Full/sec"
+        aggregation: "mean"
+        filter:
+          names: []
+        thresholds:
+          warn_above: 0
+
+      - type: "rx-drop-bps"
+        label: "TRex RX Drop (bps)"
+        aggregation: "mean"
+        filter:
+          names: []
+        thresholds:
+          warn_above: 0
+
+      - type: "mean-round-trip-usec"
+        label: "Per-Stream Latency Avg (usec)"
+        aggregation: "per_instance"
+        filter:
+          names: ["stream"]
+        thresholds:
+          warn_above: 500
+          critical_above: 2000
+
+      - type: "max-round-trip-usec"
+        label: "Per-Stream Latency Max (usec)"
+        aggregation: "per_instance"
+        filter:
+          names: ["stream"]
+        thresholds:
+          warn_above: 2000
+
+      - type: "dropped-latency-pps"
+        label: "Per-Stream Dropped PPS"
+        aggregation: "per_instance"
+        filter:
+          names: ["stream"]
+        thresholds:
+          warn_above: 0
+
+      - type: "port-rx-pps"
+        label: "TRex Port RX PPS"
+        aggregation: "per_instance"
+        filter:
+          names: ["rx_port"]
+        thresholds: {}
+
+      - type: "port-tx-pps"
+        label: "TRex Port TX PPS"
+        aggregation: "per_instance"
+        filter:
+          names: ["tx_port"]
+        thresholds: {}
+
+patterns:
+  - name: "PMD Saturation with Packet Loss"
+    severity: "critical"
+    description: >
+      OVS PMD threads are near saturation and the STL test is reporting
+      lost RX packets, indicating datapath overload.
+    conditions:
+      - source: "ovs-pmd"
+        type: "pmd-busy"
+        check: "any_above"
+        value: 0.95
+      - source: "trafficgen"
+        type: "lost-rx-pps"
+        check: "value_above"
+        value: 0
+    recommendation: >
+      Add more PMD cores, rebalance PMD thread assignments, or reduce
+      the offered traffic rate.
+
+  - name: "Datapath Miss Storm"
+    severity: "warning"
+    description: >
+      OVS datapath lookup miss rate is high, suggesting flow cache thrashing
+      or insufficient EMC/Megaflow capacity.
+    conditions:
+      - source: "ovs-dpctl"
+        type: "lookups-sec"
+        check: "mean_above"
+        value: 1000
+        filter:
+          names_match:
+            action: "miss"
+    recommendation: >
+      Check flow table sizes, increase EMC capacity, or review
+      OVS flow rules for wildcarding efficiency.
+
+  - name: "TRex Queue Backpressure"
+    severity: "warning"
+    description: >
+      TRex TX queues are filling up while CPU utilization is high,
+      indicating the traffic generator itself is the bottleneck.
+    conditions:
+      - source: "trafficgen-trex-profiler"
+        type: "queue-full-per-second"
+        check: "mean_above"
+        value: 0
+      - source: "trafficgen-trex-profiler"
+        type: "tx-cpu-util"
+        check: "mean_above"
+        value: 80
+    recommendation: >
+      Reduce offered rate, optimize traffic profile, or add more
+      TRex worker cores.
+
+  - name: "DPDK Mempool Exhaustion"
+    severity: "critical"
+    description: >
+      DPDK memory pool utilization is critically high while packets are
+      being dropped at the NIC level.
+    conditions:
+      - source: "dpdk"
+        type: "mempool-used-pct"
+        check: "any_above"
+        value: 90
+      - source: "dpdk"
+        type: "rx-missed-sec"
+        check: "mean_above"
+        value: 0
+    recommendation: >
+      Increase mempool size or check for buffer leaks in the
+      DPDK application.
+
+  - name: "NIC Error Storm"
+    severity: "warning"
+    description: >
+      Physical NIC is reporting elevated error rates, which may indicate
+      cable or signal integrity issues.
+    conditions:
+      - source: "ethtool"
+        type: "errors-sec"
+        check: "sum_above"
+        value: 100
+    recommendation: >
+      Check physical cabling, NIC firmware version, and interface error
+      counters for specific error types.
+
+  - name: "PMD Hot Function"
+    severity: "info"
+    description: >
+      A single function is consuming more than 50% of PMD CPU cycles,
+      which may indicate an optimization opportunity.
+    conditions:
+      - source: "ebpf-dpdk"
+        type: "top-function-pct"
+        check: "any_above"
+        value: 50
+    recommendation: >
+      Review the hot function for optimization opportunities. If it is
+      a lookup function, consider enabling hardware offloads.

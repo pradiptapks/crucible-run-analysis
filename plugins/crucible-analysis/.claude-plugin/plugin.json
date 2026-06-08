@@ -1,0 +1,7 @@
+{
+    "name": "crucible-analysis",
+    "version": "1.0.0",
+    "description": "Profile-driven benchmark run analysis for the crucible performance testing framework",
+    "author": { "name": "perftool-incubator" },
+    "license": "Apache-2.0"
+}

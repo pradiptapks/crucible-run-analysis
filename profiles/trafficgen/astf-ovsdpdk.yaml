@@ -1,0 +1,518 @@
+name: "TrafficGen ASTF + OVS-DPDK"
+benchmark: "trafficgen"
+version: 2
+extends: "_base"
+
+match:
+  tags:
+    trafficgen_backend: "trex-astf"
+  tools_present: ["ovs", "dpdk"]
+  tools_absent: []
+
+primary_metrics:
+  - source: "trafficgen"
+    type: "connections-per-second"
+    label: "Connections/sec"
+    class: "throughput"
+    thresholds: {}
+
+  - source: "trafficgen"
+    type: "active-flows"
+    label: "Active Flows"
+    class: "count"
+    thresholds: {}
+
+  - source: "trafficgen"
+    type: "established-flows"
+    label: "Established Flows"
+    class: "count"
+    thresholds: {}
+
+  - source: "trafficgen"
+    type: "retransmit-pct"
+    label: "Retransmit %"
+    class: "count"
+    thresholds:
+      warn_above: 1.0
+      critical_above: 5.0
+
+  - source: "trafficgen"
+    type: "connection-error-pct"
+    label: "Connection Error %"
+    class: "count"
+    thresholds:
+      warn_above: 1.0
+      critical_above: 5.0
+
+  - source: "trafficgen"
+    type: "tcp-rtt-avg-usec"
+    label: "TCP RTT Avg (usec)"
+    class: "count"
+    thresholds:
+      warn_above: 500
+      critical_above: 2000
+
+  - source: "trafficgen"
+    type: "l7-tx-bps"
+    label: "L7 TX Throughput (bps)"
+    class: "throughput"
+    thresholds: {}
+
+  - source: "trafficgen"
+    type: "l7-rx-bps"
+    label: "L7 RX Throughput (bps)"
+    class: "throughput"
+    thresholds: {}
+
+  - source: "trafficgen"
+    type: "latency-avg-usec"
+    label: "Latency Avg (usec)"
+    class: "count"
+    thresholds:
+      warn_above: 500
+      critical_above: 2000
+
+  - source: "trafficgen"
+    type: "latency-max-usec"
+    label: "Latency Max (usec)"
+    class: "count"
+    thresholds:
+      warn_above: 2000
+      critical_above: 10000
+
+  - source: "trafficgen"
+    type: "tcp-syn-ack-latency-usec"
+    label: "TCP SYN-ACK Latency (usec)"
+    class: "count"
+    thresholds:
+      warn_above: 1000
+      critical_above: 5000
+
+  - source: "trafficgen"
+    type: "tcp-request-response-latency-usec"
+    label: "TCP Req-Resp Latency (usec)"
+    class: "count"
+    thresholds:
+      warn_above: 1000
+      critical_above: 5000
+
+  - source: "trafficgen"
+    type: "connections-dropped-per-second"
+    label: "Connections Dropped/sec"
+    class: "throughput"
+    thresholds:
+      warn_above: 100
+      critical_above: 1000
+
+  - source: "trafficgen"
+    type: "out-of-order-pct"
+    label: "Out-of-Order %"
+    class: "count"
+    thresholds:
+      warn_above: 1.0
+      critical_above: 5.0
+
+  - source: "trafficgen"
+    type: "server-drops"
+    label: "Server Drops"
+    class: "count"
+    thresholds:
+      warn_above: 0
+
+  - source: "trafficgen"
+    type: "tcp-conn-drops"
+    label: "TCP Connection Drops"
+    class: "count"
+    thresholds:
+      warn_above: 0
+
+tool_correlations:
+  # ---- DPDK NIC telemetry ----
+  - tool: "dpdk"
+    source: "dpdk"
+    condition: "tool_present"
+    metrics:
+      - type: "rx-missed-sec"
+        label: "DPDK RX Missed/sec"
+        aggregation: "sum"
+        filter:
+          names: ["device"]
+        thresholds:
+          warn_above: 100
+          critical_above: 1000
+
+      - type: "rx-pps"
+        label: "DPDK RX PPS"
+        aggregation: "per_instance"
+        filter:
+          names: ["device"]
+        thresholds: {}
+
+      - type: "tx-pps"
+        label: "DPDK TX PPS"
+        aggregation: "per_instance"
+        filter:
+          names: ["device"]
+        thresholds: {}
+
+      - type: "rx-Gbps"
+        label: "DPDK RX Gbps"
+        aggregation: "per_instance"
+        filter:
+          names: ["device"]
+        thresholds: {}
+
+      - type: "tx-Gbps"
+        label: "DPDK TX Gbps"
+        aggregation: "per_instance"
+        filter:
+          names: ["device"]
+        thresholds: {}
+
+      - type: "mempool-used-pct"
+        label: "DPDK Mempool Used %"
+        aggregation: "max"
+        filter:
+          names: ["mempool_name"]
+        thresholds:
+          warn_above: 80
+          critical_above: 95
+
+      - type: "queue-pps"
+        label: "DPDK Queue PPS"
+        aggregation: "per_instance"
+        filter:
+          names: ["device", "direction", "queue"]
+        thresholds: {}
+
+  # ---- OVS PMD thread performance ----
+  - tool: "ovs"
+    source: "ovs-pmd"
+    condition: "tool_present"
+    metrics:
+      - type: "pmd-busy"
+        label: "OVS PMD Busy"
+        aggregation: "per_instance"
+        filter:
+          names: ["core", "id"]
+        thresholds:
+          warn_above: 0.90
+          critical_above: 0.98
+
+      - type: "kpps"
+        label: "OVS PMD kpps"
+        aggregation: "per_instance"
+        filter:
+          names: ["core", "direction", "id"]
+        thresholds: {}
+
+      - type: "datapath-hits-sec"
+        label: "Datapath Hits/sec"
+        aggregation: "per_instance"
+        filter:
+          names: ["dp"]
+        thresholds: {}
+
+  # ---- OVS datapath statistics ----
+  - tool: "ovs"
+    source: "ovs-dpctl"
+    condition: "tool_present"
+    metrics:
+      - type: "lookups-sec"
+        label: "Datapath Lookups/sec"
+        aggregation: "per_instance"
+        filter:
+          names: ["action"]
+        thresholds: {}
+
+      - type: "flows-count"
+        label: "Datapath Flow Count"
+        aggregation: "mean"
+        filter:
+          names: ["interface"]
+        thresholds: {}
+
+      - type: "masks-sec"
+        label: "Masks/sec"
+        aggregation: "per_instance"
+        filter:
+          names: ["action"]
+        thresholds: {}
+
+      - type: "ct-stats-show"
+        label: "Conntrack Stats"
+        aggregation: "per_instance"
+        filter:
+          names: ["protocol"]
+        thresholds: {}
+
+      - type: "ufid-new-flows-sec"
+        label: "New Flows/sec"
+        aggregation: "mean"
+        filter:
+          names: []
+        thresholds: {}
+
+      - type: "ufid-expired-flows-sec"
+        label: "Expired Flows/sec"
+        aggregation: "mean"
+        filter:
+          names: []
+        thresholds: {}
+
+  # ---- OVS port counters ----
+  - tool: "ovs"
+    source: "ovs-ofctl"
+    condition: "tool_present"
+    metrics:
+      - type: "Gbps"
+        label: "OVS Port Gbps"
+        aggregation: "per_instance"
+        filter:
+          names: ["bridge", "interface", "direction"]
+        thresholds: {}
+
+      - type: "packets-sec"
+        label: "OVS Port PPS"
+        aggregation: "per_instance"
+        filter:
+          names: ["bridge", "interface", "direction"]
+        thresholds: {}
+
+      - type: "errors-sec"
+        label: "OVS Port Errors/sec"
+        aggregation: "sum"
+        filter:
+          names: ["bridge", "interface", "direction"]
+        thresholds:
+          warn_above: 100
+
+  # ---- OVS upcalls and memory ----
+  - tool: "ovs"
+    source: "ovs-appctl"
+    condition: "tool_present"
+    metrics:
+      - type: "upcall-flow"
+        label: "Upcall Flow Count"
+        aggregation: "mean"
+        filter:
+          names: ["interface"]
+        thresholds:
+          warn_above: 1000
+
+      - type: "upcall-flow-avg"
+        label: "Upcall Flow Avg"
+        aggregation: "mean"
+        filter:
+          names: ["interface"]
+        thresholds: {}
+
+      - type: "mem-show"
+        label: "OVS Memory"
+        aggregation: "per_instance"
+        filter:
+          names: ["source"]
+        thresholds: {}
+
+  # ---- ethtool NIC counters ----
+  - tool: "ethtool"
+    source: "ethtool"
+    condition: "tool_present"
+    metrics:
+      - type: "packets-sec"
+        label: "NIC Packets/sec"
+        aggregation: "per_instance"
+        filter:
+          names: ["interface", "direction"]
+        thresholds: {}
+
+      - type: "errors-sec"
+        label: "NIC Errors/sec"
+        aggregation: "sum"
+        filter:
+          names: ["interface", "direction"]
+        thresholds:
+          warn_above: 100
+
+      - type: "dropped-sec"
+        label: "NIC Dropped/sec"
+        aggregation: "sum"
+        filter:
+          names: ["interface", "direction"]
+        thresholds:
+          warn_above: 0
+          critical_above: 100
+
+  # ---- ebpf-dpdk PMD profiling ----
+  - tool: "ebpf-dpdk"
+    source: "ebpf-dpdk"
+    condition: "tool_present"
+    metrics:
+      - type: "top-function-pct"
+        label: "PMD Top Function %"
+        aggregation: "max"
+        filter:
+          names: ["function"]
+        thresholds: {}
+
+      - type: "perf-samples"
+        label: "Perf Samples"
+        aggregation: "sum"
+        filter:
+          names: []
+        thresholds: {}
+
+profiler_correlations: []
+
+patterns:
+  - name: "PMD Saturation with Drops"
+    severity: "critical"
+    description: >
+      OVS PMD threads are near saturation and DPDK is reporting missed RX
+      packets, indicating the data path cannot keep up with the offered load.
+    conditions:
+      - source: "ovs-pmd"
+        type: "pmd-busy"
+        check: "any_above"
+        value: 0.95
+      - source: "dpdk"
+        type: "rx-missed-sec"
+        check: "mean_above"
+        value: 0
+    recommendation: >
+      Add more PMD cores, rebalance PMD thread assignments, or reduce
+      the offered traffic rate.
+
+  - name: "Datapath Miss Storm"
+    severity: "warning"
+    description: >
+      OVS datapath lookup miss rate is high, suggesting flow cache thrashing
+      or insufficient EMC/Megaflow capacity.
+    conditions:
+      - source: "ovs-dpctl"
+        type: "lookups-sec"
+        check: "mean_above"
+        value: 1000
+        filter:
+          names_match:
+            action: "miss"
+    recommendation: >
+      Check flow table sizes, enable connection tracking offload, or review
+      OVS flow rules for wildcarding efficiency.
+
+  - name: "High Retransmission Rate"
+    severity: "warning"
+    description: >
+      TCP retransmission rate exceeds acceptable threshold, indicating
+      packet loss in the network path.
+    conditions:
+      - source: "trafficgen"
+        type: "retransmit-pct"
+        check: "value_above"
+        value: 1.0
+    recommendation: >
+      Check for packet drops at OVS or DPDK level, verify MTU settings,
+      and check for buffer overflows.
+
+  - name: "Memory Pressure During Test"
+    severity: "warning"
+    description: >
+      System is actively paging out memory during the test, which can
+      cause latency spikes and throughput drops.
+    conditions:
+      - source: "sar-mem"
+        type: "Memory-Used-Percent"
+        check: "mean_above"
+        value: 90
+      - source: "sar-mem"
+        type: "KB-Paged-out-sec"
+        check: "mean_above"
+        value: 1000
+    recommendation: >
+      Reduce memory consumers, increase system RAM, or check for memory
+      leaks in testpmd/OVS.
+
+  - name: "High Upcall Pressure"
+    severity: "warning"
+    description: >
+      OVS upcall flow count is elevated, indicating the userspace
+      daemon is under pressure from new flow installations.
+    conditions:
+      - source: "ovs-appctl"
+        type: "upcall-flow"
+        check: "mean_above"
+        value: 1000
+    recommendation: >
+      Check OVS flow rules for overly specific matches, enable
+      megaflow caching, or tune revalidator threads.
+
+  - name: "Connection Drop Storm"
+    severity: "critical"
+    description: >
+      High rate of dropped connections combined with PMD saturation suggests
+      the datapath is overwhelmed by connection setup overhead.
+    conditions:
+      - source: "trafficgen"
+        type: "connections-dropped-per-second"
+        check: "value_above"
+        value: 100
+      - source: "ovs-pmd"
+        type: "pmd-busy"
+        check: "any_above"
+        value: 0.90
+    recommendation: >
+      Reduce offered connection rate, add PMD cores, or optimize OVS
+      connection tracking configuration.
+
+  - name: "Conntrack Exhaustion"
+    severity: "critical"
+    description: >
+      Conntrack table is near capacity while connection errors are rising,
+      suggesting the DUT cannot track additional flows.
+    conditions:
+      - source: "ovs-dpctl"
+        type: "ct-stats-show"
+        check: "mean_above"
+        value: 1000000
+        filter:
+          names_match:
+            protocol: "total"
+      - source: "trafficgen"
+        type: "connection-error-pct"
+        check: "value_above"
+        value: 1.0
+    recommendation: >
+      Increase conntrack table size (nf_conntrack_max), reduce connection
+      timeout values, or enable conntrack offload.
+
+  - name: "DPDK Mempool Exhaustion"
+    severity: "critical"
+    description: >
+      DPDK memory pool utilization is critically high while packets are
+      being dropped, indicating buffer exhaustion.
+    conditions:
+      - source: "dpdk"
+        type: "mempool-used-pct"
+        check: "any_above"
+        value: 90
+      - source: "dpdk"
+        type: "rx-missed-sec"
+        check: "mean_above"
+        value: 0
+    recommendation: >
+      Increase mempool size, reduce packet buffer retention time, or
+      check for memory leaks in the DPDK application.
+
+  - name: "NIC Error Storm"
+    severity: "warning"
+    description: >
+      Physical NIC is reporting elevated error rates, which may indicate
+      cable issues, NIC firmware problems, or signal integrity issues.
+    conditions:
+      - source: "ethtool"
+        type: "errors-sec"
+        check: "sum_above"
+        value: 100
+    recommendation: >
+      Check physical cabling, NIC firmware version, and interface error
+      counters for specific error types (CRC, frame, overrun).

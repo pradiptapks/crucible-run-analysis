@@ -1,0 +1,125 @@
+name: "Base System Analysis"
+benchmark: "_base"
+version: 2
+
+primary_metrics: []
+
+tool_correlations:
+  - tool: "sysstat"
+    source: "mpstat"
+    metrics:
+      - type: "Busy-CPU"
+        label: "CPU Utilization (all cores avg)"
+        aggregation: "mean"
+        filter:
+          names: ["num"]
+          names_match:
+            type: ["usr", "sys"]
+        thresholds:
+          warn_above: 90
+          critical_above: 98
+
+      - type: "Busy-CPU"
+        label: "CPU Utilization (hottest core)"
+        aggregation: "max"
+        filter:
+          names: ["num"]
+          names_match:
+            type: ["usr", "sys"]
+        thresholds:
+          warn_above: 95
+          critical_above: 99
+
+  - tool: "sysstat"
+    source: "sar-mem"
+    metrics:
+      - type: "Memory-Used-Percent"
+        label: "Memory Used %"
+        aggregation: "mean"
+        filter:
+          names: []
+        thresholds:
+          warn_above: 85
+          critical_above: 95
+
+      - type: "KB-Paged-out-sec"
+        label: "Pages Out KB/sec"
+        aggregation: "mean"
+        filter:
+          names: []
+        thresholds:
+          warn_above: 1000
+          critical_above: 10000
+
+  - tool: "sysstat"
+    source: "sar-scheduler"
+    metrics:
+      - type: "Run-Queue-Length"
+        label: "Run Queue Length"
+        aggregation: "mean"
+        filter:
+          names: []
+        thresholds:
+          warn_above: 10
+          critical_above: 50
+
+      - type: "Load-Average-01m"
+        label: "Load Average (1m)"
+        aggregation: "mean"
+        filter:
+          names: []
+        thresholds: {}
+
+  - tool: "sysstat"
+    source: "sar-tasks"
+    metrics:
+      - type: "Context-switches-sec"
+        label: "Context Switches/sec"
+        aggregation: "mean"
+        filter:
+          names: []
+        thresholds: {}
+
+  - tool: "sysstat"
+    source: "iostat"
+    metrics:
+      - type: "percent-utilization"
+        label: "Disk Utilization %"
+        aggregation: "max"
+        filter:
+          names: ["dev"]
+        thresholds:
+          warn_above: 80
+          critical_above: 95
+
+  - tool: "sysstat"
+    source: "sar-net"
+    metrics:
+      - type: "L2-Gbps"
+        label: "Network Throughput (Gbps)"
+        aggregation: "per_instance"
+        filter:
+          names: ["dev", "direction"]
+        thresholds: {}
+
+  - tool: "procstat"
+    source: "procstat"
+    condition: "tool_present"
+    metrics:
+      - type: "interrupts-sec"
+        label: "Total Interrupts/sec"
+        aggregation: "sum"
+        filter:
+          names: []
+        thresholds: {}
+
+      - type: "processed-sec"
+        label: "Softnet Processed/sec"
+        aggregation: "sum"
+        filter:
+          names: []
+        thresholds: {}
+
+profiler_correlations: []
+
+patterns: []

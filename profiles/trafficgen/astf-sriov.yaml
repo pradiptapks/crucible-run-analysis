@@ -1,0 +1,328 @@
+name: "TrafficGen ASTF + SR-IOV"
+benchmark: "trafficgen"
+version: 2
+extends: "_base"
+
+match:
+  tags:
+    trafficgen_backend: "trex-astf"
+  tools_present: ["dpdk"]
+  tools_absent: ["ovs"]
+
+primary_metrics:
+  - source: "trafficgen"
+    type: "connections-per-second"
+    label: "Connections/sec"
+    class: "throughput"
+    thresholds: {}
+
+  - source: "trafficgen"
+    type: "active-flows"
+    label: "Active Flows"
+    class: "count"
+    thresholds: {}
+
+  - source: "trafficgen"
+    type: "established-flows"
+    label: "Established Flows"
+    class: "count"
+    thresholds: {}
+
+  - source: "trafficgen"
+    type: "retransmit-pct"
+    label: "Retransmit %"
+    class: "count"
+    thresholds:
+      warn_above: 1.0
+      critical_above: 5.0
+
+  - source: "trafficgen"
+    type: "connection-error-pct"
+    label: "Connection Error %"
+    class: "count"
+    thresholds:
+      warn_above: 1.0
+      critical_above: 5.0
+
+  - source: "trafficgen"
+    type: "tcp-rtt-avg-usec"
+    label: "TCP RTT Avg (usec)"
+    class: "count"
+    thresholds:
+      warn_above: 500
+      critical_above: 2000
+
+  - source: "trafficgen"
+    type: "l7-tx-bps"
+    label: "L7 TX Throughput (bps)"
+    class: "throughput"
+    thresholds: {}
+
+  - source: "trafficgen"
+    type: "l7-rx-bps"
+    label: "L7 RX Throughput (bps)"
+    class: "throughput"
+    thresholds: {}
+
+  - source: "trafficgen"
+    type: "latency-avg-usec"
+    label: "Latency Avg (usec)"
+    class: "count"
+    thresholds:
+      warn_above: 500
+      critical_above: 2000
+
+  - source: "trafficgen"
+    type: "latency-max-usec"
+    label: "Latency Max (usec)"
+    class: "count"
+    thresholds:
+      warn_above: 2000
+      critical_above: 10000
+
+  - source: "trafficgen"
+    type: "tcp-syn-ack-latency-usec"
+    label: "TCP SYN-ACK Latency (usec)"
+    class: "count"
+    thresholds:
+      warn_above: 1000
+      critical_above: 5000
+
+  - source: "trafficgen"
+    type: "connections-dropped-per-second"
+    label: "Connections Dropped/sec"
+    class: "throughput"
+    thresholds:
+      warn_above: 100
+      critical_above: 1000
+
+  - source: "trafficgen"
+    type: "out-of-order-pct"
+    label: "Out-of-Order %"
+    class: "count"
+    thresholds:
+      warn_above: 1.0
+      critical_above: 5.0
+
+  - source: "trafficgen"
+    type: "server-drops"
+    label: "Server Drops"
+    class: "count"
+    thresholds:
+      warn_above: 0
+
+tool_correlations:
+  # ---- DPDK NIC telemetry (primary visibility for SR-IOV) ----
+  - tool: "dpdk"
+    source: "dpdk"
+    condition: "tool_present"
+    metrics:
+      - type: "rx-missed-sec"
+        label: "DPDK RX Missed/sec"
+        aggregation: "sum"
+        filter:
+          names: ["device"]
+        thresholds:
+          warn_above: 100
+          critical_above: 1000
+
+      - type: "rx-pps"
+        label: "DPDK RX PPS"
+        aggregation: "per_instance"
+        filter:
+          names: ["device"]
+        thresholds: {}
+
+      - type: "tx-pps"
+        label: "DPDK TX PPS"
+        aggregation: "per_instance"
+        filter:
+          names: ["device"]
+        thresholds: {}
+
+      - type: "rx-Gbps"
+        label: "DPDK RX Gbps"
+        aggregation: "per_instance"
+        filter:
+          names: ["device"]
+        thresholds: {}
+
+      - type: "tx-Gbps"
+        label: "DPDK TX Gbps"
+        aggregation: "per_instance"
+        filter:
+          names: ["device"]
+        thresholds: {}
+
+      - type: "mempool-used-pct"
+        label: "DPDK Mempool Used %"
+        aggregation: "max"
+        filter:
+          names: ["mempool_name"]
+        thresholds:
+          warn_above: 80
+          critical_above: 95
+
+      - type: "queue-pps"
+        label: "DPDK Queue PPS"
+        aggregation: "per_instance"
+        filter:
+          names: ["device", "direction", "queue"]
+        thresholds: {}
+
+      - type: "link-status"
+        label: "Link Status"
+        aggregation: "per_instance"
+        filter:
+          names: ["device"]
+        thresholds: {}
+
+  # ---- ethtool NIC counters (critical for SR-IOV visibility) ----
+  - tool: "ethtool"
+    source: "ethtool"
+    condition: "tool_present"
+    metrics:
+      - type: "packets-sec"
+        label: "NIC Packets/sec"
+        aggregation: "per_instance"
+        filter:
+          names: ["interface", "direction"]
+        thresholds: {}
+
+      - type: "bytes-sec"
+        label: "NIC Bytes/sec"
+        aggregation: "per_instance"
+        filter:
+          names: ["interface", "direction"]
+        thresholds: {}
+
+      - type: "errors-sec"
+        label: "NIC Errors/sec"
+        aggregation: "sum"
+        filter:
+          names: ["interface", "direction"]
+        thresholds:
+          warn_above: 100
+
+      - type: "dropped-sec"
+        label: "NIC Dropped/sec"
+        aggregation: "sum"
+        filter:
+          names: ["interface", "direction"]
+        thresholds:
+          warn_above: 0
+          critical_above: 100
+
+  # ---- ebpf-dpdk PMD profiling ----
+  - tool: "ebpf-dpdk"
+    source: "ebpf-dpdk"
+    condition: "tool_present"
+    metrics:
+      - type: "top-function-pct"
+        label: "PMD Top Function %"
+        aggregation: "max"
+        filter:
+          names: ["function"]
+        thresholds: {}
+
+      - type: "perf-samples"
+        label: "Perf Samples"
+        aggregation: "sum"
+        filter:
+          names: []
+        thresholds: {}
+
+profiler_correlations: []
+
+patterns:
+  - name: "NIC Drop under Load"
+    severity: "critical"
+    description: >
+      DPDK is reporting missed RX packets on the VF, indicating the NIC
+      ring buffer or VF queue is exhausted under load.
+    conditions:
+      - source: "dpdk"
+        type: "rx-missed-sec"
+        check: "mean_above"
+        value: 0
+    recommendation: >
+      Increase VF ring buffer size, check RSS configuration, or reduce
+      offered traffic rate to match VF capacity.
+
+  - name: "High Retransmission without OVS"
+    severity: "warning"
+    description: >
+      TCP retransmission rate is elevated in SR-IOV mode where no OVS
+      datapath exists, implying NIC/VF queue or interrupt handling issues.
+    conditions:
+      - source: "trafficgen"
+        type: "retransmit-pct"
+        check: "value_above"
+        value: 1.0
+    recommendation: >
+      Check VF queue depth, interrupt coalescing settings, and ensure
+      RSS hash is distributing flows evenly across queues.
+
+  - name: "Memory Pressure During Test"
+    severity: "warning"
+    description: >
+      System is actively paging out memory during the test, which can
+      cause latency spikes and throughput drops.
+    conditions:
+      - source: "sar-mem"
+        type: "Memory-Used-Percent"
+        check: "mean_above"
+        value: 90
+      - source: "sar-mem"
+        type: "KB-Paged-out-sec"
+        check: "mean_above"
+        value: 1000
+    recommendation: >
+      Reduce memory consumers, increase system RAM, or check for memory
+      leaks in the application.
+
+  - name: "NIC Error Storm"
+    severity: "warning"
+    description: >
+      Physical NIC is reporting elevated error rates via ethtool counters,
+      which may indicate cable issues or firmware problems.
+    conditions:
+      - source: "ethtool"
+        type: "errors-sec"
+        check: "sum_above"
+        value: 100
+    recommendation: >
+      Check physical cabling, NIC firmware version, and interface error
+      counters for specific error types.
+
+  - name: "DPDK Mempool Exhaustion"
+    severity: "critical"
+    description: >
+      DPDK memory pool utilization is critically high, indicating buffer
+      exhaustion which causes packet drops.
+    conditions:
+      - source: "dpdk"
+        type: "mempool-used-pct"
+        check: "any_above"
+        value: 90
+    recommendation: >
+      Increase mempool size, reduce packet buffer retention time, or
+      check for memory leaks in the DPDK application.
+
+  - name: "VF Queue Exhaustion"
+    severity: "warning"
+    description: >
+      NIC is dropping packets (ethtool) coinciding with DPDK RX misses,
+      suggesting the VF queue depth is insufficient for the traffic rate.
+    conditions:
+      - source: "ethtool"
+        type: "dropped-sec"
+        check: "sum_above"
+        value: 0
+      - source: "dpdk"
+        type: "rx-missed-sec"
+        check: "mean_above"
+        value: 0
+    recommendation: >
+      Increase VF ring buffer size (ethtool -G), tune interrupt
+      coalescing, or distribute traffic across more queues.
