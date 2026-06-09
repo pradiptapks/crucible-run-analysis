@@ -265,8 +265,13 @@ def find_descriptors(all_descs, source, metric_type, names_match=None):
     results = []
     for desc in all_descs:
         d = desc.get("desc", {})
-        if source and d.get("source") != source:
-            continue
+        if source:
+            if "*" in source or "?" in source:
+                if not fnmatch.fnmatch(d.get("source", ""), source):
+                    continue
+            else:
+                if d.get("source") != source:
+                    continue
         if metric_type:
             if "*" in metric_type or "?" in metric_type:
                 if not fnmatch.fnmatch(d.get("type", ""), metric_type):
@@ -595,6 +600,16 @@ def discover_tool_instances(run_dir, tool_name):
             instances.append(path)
 
     if not instances:
+        # Multi-instance tools use an id suffix on the inner directory
+        # (e.g., ebpf-dpdk-ovs instead of ebpf-dpdk)
+        prefix_pattern = os.path.join(run_dir, "run", "tool-data", "*",
+                                      f"*-{tool_name}-*", f"{tool_name}-*",
+                                      "")
+        for path in sorted(glob.glob(prefix_pattern)):
+            if os.path.isdir(path):
+                instances.append(path)
+
+    if not instances:
         alt_pattern = os.path.join(run_dir, "iterations", "iteration-*",
                                    "sample-*", "*", "*", "tool-data",
                                    f"*{tool_name}*", "")
@@ -873,27 +888,42 @@ def analyze_tool_correlations(profile, run_dir, tools, all_tool_descs=None):
             names_keys = metric_def.get("filter", {}).get("names", [])
             dynamic = metric_def.get("dynamic", False)
 
-            if dynamic:
-                type_patterns = [metric_type] if metric_type else ["*"]
-                discovered_types = set()
-                for desc in instance_descs:
-                    dt = desc.get("desc", {}).get("type", "")
-                    for pat in type_patterns:
-                        if fnmatch.fnmatch(dt, pat):
-                            discovered_types.add(dt)
-                for disc_type in sorted(discovered_types):
-                    disc_label = label.replace("{type}", disc_type) if "{type}" in label else f"{label}/{disc_type}"
-                    _process_correlation(
-                        instance_descs, source, disc_type, disc_label,
-                        aggregation, thresholds, names_keys, tool_name,
-                        results, alerts
+            is_glob_source = "*" in source or "?" in source
+            if is_glob_source:
+                actual_sources = sorted(set(
+                    d.get("desc", {}).get("source", "")
+                    for d in instance_descs
+                    if fnmatch.fnmatch(
+                        d.get("desc", {}).get("source", ""), source
                     )
+                ))
             else:
-                _process_correlation(
-                    instance_descs, source, metric_type, label,
-                    aggregation, thresholds, names_keys, tool_name,
-                    results, alerts
-                )
+                actual_sources = [source]
+
+            for actual_source in actual_sources:
+                report_tool = actual_source if is_glob_source else tool_name
+
+                if dynamic:
+                    type_patterns = [metric_type] if metric_type else ["*"]
+                    discovered_types = set()
+                    for desc in instance_descs:
+                        dt = desc.get("desc", {}).get("type", "")
+                        for pat in type_patterns:
+                            if fnmatch.fnmatch(dt, pat):
+                                discovered_types.add(dt)
+                    for disc_type in sorted(discovered_types):
+                        disc_label = label.replace("{type}", disc_type) if "{type}" in label else f"{label}/{disc_type}"
+                        _process_correlation(
+                            instance_descs, actual_source, disc_type,
+                            disc_label, aggregation, thresholds,
+                            names_keys, report_tool, results, alerts
+                        )
+                else:
+                    _process_correlation(
+                        instance_descs, actual_source, metric_type,
+                        label, aggregation, thresholds, names_keys,
+                        report_tool, results, alerts
+                    )
 
     return results, alerts
 
@@ -1010,6 +1040,21 @@ def analyze_profiler_correlations(profile, profiler_descs, bench_descs):
     return results, alerts
 
 
+def _lookup_pattern_values(all_metric_data, source, mtype):
+    """Look up values from the metric data map, supporting glob patterns."""
+    use_glob = ("*" in source or "?" in source or
+                "*" in mtype or "?" in mtype)
+    if not use_glob:
+        return all_metric_data.get(f"{source}/{mtype}", [])
+
+    values = []
+    for key, vals in all_metric_data.items():
+        key_source, _, key_type = key.partition("/")
+        if fnmatch.fnmatch(key_source, source) and fnmatch.fnmatch(key_type, mtype):
+            values.extend(vals)
+    return values
+
+
 def detect_patterns(profile, bench_descs, profiler_descs, tool_corr_results):
     patterns = profile.get("patterns", [])
     if not patterns:
@@ -1056,8 +1101,9 @@ def detect_patterns(profile, bench_descs, profiler_descs, tool_corr_results):
             check = cond.get("check", "")
             threshold = cond.get("threshold", 0)
 
-            key = f"{source}/{mtype}"
-            values = all_metric_data.get(key, [])
+            values = _lookup_pattern_values(
+                all_metric_data, source, mtype
+            )
 
             if not values:
                 all_met = False

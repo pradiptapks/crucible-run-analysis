@@ -20,6 +20,7 @@ The project has two components:
 | `profiles/_base.yaml` | Universal system metrics (sysstat, procstat) |
 | `profiles/trafficgen/` | Trafficgen profiles (astf-ovsdpdk, astf-sriov, stl-ovsdpdk, stl-sriov) |
 | `plugins/crucible-analysis/` | Claude plugin (SKILL.md, plugin.json) |
+| `examples/` | Sample analysis reports (single-run, comparison) |
 | `docs/` | Architecture and CLI reference documentation |
 
 ## Profile System
@@ -32,6 +33,12 @@ Profiles are YAML files that define:
 - `patterns`: Cross-tool composite anomaly conditions
 
 The engine auto-detects the correct profile based on run-file.json tags and tool-params.json.
+
+### Glob Source Matching
+
+Profile `source` and `type` fields support glob patterns (`*`, `?`). This is required for multi-instance tools like ebpf-dpdk where the metric source name includes an instance suffix (e.g., `ebpf-dpdk-ovs`, `ebpf-dpdk-testpmd`). Use `source: "ebpf-dpdk*"` to match all instances. The engine automatically splits results per actual source, so each instance gets its own section in the report.
+
+Pattern conditions also support glob source matching for cross-tool anomaly detection.
 
 ## Trafficgen Mode Detection
 

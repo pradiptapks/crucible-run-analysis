@@ -282,6 +282,27 @@ run/tool-data/
 
 Instance segment format: `{role}-{index}-{tool}-{instance_number}`
 
+#### Multi-Instance Tools
+
+Some tools support multiple concurrent instances targeting different processes, configured via the `id` field in `tool-params.json`. For example, `ebpf-dpdk` can profile both OVS and testpmd simultaneously:
+
+```json
+[
+    { "tool": "ebpf-dpdk", "id": "ebpf-dpdk-ovs", "params": [{ "arg": "target", "val": "ovs-vswitchd" }] },
+    { "tool": "ebpf-dpdk", "id": "ebpf-dpdk-testpmd", "params": [{ "arg": "target", "val": "testpmd" }] }
+]
+```
+
+Multi-instance tools produce directories and metric sources named by `id` rather than the base tool name:
+
+```
+run/tool-data/profiler/
+    remotehosts-1-ebpf-dpdk-ovs-3/ebpf-dpdk-ovs/metric-data-0.{json,csv.xz}
+    remotehosts-1-ebpf-dpdk-testpmd-2/ebpf-dpdk-testpmd/metric-data-0.{json,csv.xz}
+```
+
+The engine's `discover_tool_instances()` handles this by first attempting an exact-name match on the inner directory, then falling back to a prefix match (`{tool_name}-*`).
+
 ### 5.4 Caching Strategy
 
 CSV data is cached by file path. When multiple profile entries reference the same CSV (e.g., both tool_correlations and patterns referencing `mpstat` data), the CSV is decompressed and parsed only once.
@@ -313,7 +334,35 @@ Each `tool_correlations` group specifies a tool, condition, source, and metrics 
 | `sum` | Sum of all values |
 | `per_instance` | Report each names-group separately |
 
-### 6.3 Dynamic Type Discovery
+### 6.3 Glob Source Matching and Per-Instance Reporting
+
+Profile `source` and `type` fields support glob patterns (`*`, `?`) via `fnmatch`. This is essential for multi-instance tools where the metric source name includes an instance suffix:
+
+```yaml
+tool_correlations:
+  - tool: "ebpf-dpdk"
+    source: "ebpf-dpdk*"        # matches ebpf-dpdk-ovs, ebpf-dpdk-testpmd, etc.
+    condition: "tool_present"
+    metrics:
+      - type: "top-function-pct"
+        label: "PMD Top Function %"
+```
+
+When a glob source pattern matches multiple distinct sources, the engine automatically splits results into separate per-source groups. Each actual source (e.g., `ebpf-dpdk-ovs`, `ebpf-dpdk-testpmd`) appears as its own section in the Tool Summary, allowing side-by-side comparison of different profiling targets.
+
+Pattern conditions also support glob source matching:
+
+```yaml
+patterns:
+  - name: "PMD Hot Function"
+    conditions:
+      - source: "ebpf-dpdk*"   # fires if any ebpf-dpdk instance has a hot function
+        type: "top-function-pct"
+        check: "any_above"
+        value: 50
+```
+
+### 6.4 Dynamic Type Discovery
 
 Some tools produce metric types not known at profile authoring time:
 
@@ -324,7 +373,7 @@ Some tools produce metric types not known at profile authoring time:
 
 Profiles reference these via `dynamic: true` with a wildcard type pattern. The engine discovers all matching types at runtime.
 
-### 6.4 Pattern Detection
+### 6.5 Pattern Detection
 
 Patterns define composite anomaly conditions:
 
@@ -346,7 +395,7 @@ patterns:
 
 All conditions use AND logic. Check types: `any_above`, `mean_above`, `sum_above`, `any_below`, `mean_below`, `value_above`.
 
-### 6.5 Recommendations
+### 6.6 Recommendations
 
 Generated from:
 - Triggered patterns (pattern.recommendation)
@@ -431,7 +480,7 @@ primary_metrics:
 
 tool_correlations:
   - tool: "dpdk"
-    source: "dpdk"
+    source: "dpdk"                  # exact match
     condition: "tool_present"
     metrics:
       - type: "rx-missed-sec"
@@ -446,6 +495,17 @@ tool_correlations:
         label: "DPDK xstat: {type}"
         aggregation: "sum"
         dynamic: true
+        thresholds: {}
+
+  - tool: "ebpf-dpdk"
+    source: "ebpf-dpdk*"            # glob -- matches ebpf-dpdk-ovs, ebpf-dpdk-testpmd, etc.
+    condition: "tool_present"       # each matched source reported as its own section
+    metrics:
+      - type: "top-function-pct"
+        label: "PMD Top Function %"
+        aggregation: "max"
+        filter:
+          names: ["function"]
         thresholds: {}
 
 profiler_correlations:
@@ -567,7 +627,7 @@ Six steps to add analysis support for any crucible benchmark:
 | dpdk | dpdk | NFV/packet benchmarks |
 | ovs | ovs-pmd, ovs-dpctl, ovs-ofctl, ovs-appctl | OVS-DPDK setups |
 | ethtool | ethtool | Network benchmarks |
-| ebpf-dpdk | ebpf-dpdk | DPDK function profiling |
+| ebpf-dpdk | ebpf-dpdk-ovs, ebpf-dpdk-testpmd, etc. | DPDK function profiling (use `source: "ebpf-dpdk*"` glob) |
 | nvidia | nvidia | GPU benchmarks |
 | kernel | kernel | RT/latency benchmarks |
 | ftrace | ftrace | RT/latency benchmarks |
@@ -648,11 +708,21 @@ Dynamic metric types generated from NIC driver counters:
 
 ### 12.6 ebpf-dpdk (trafficgen)
 
+ebpf-dpdk is typically deployed as multiple instances targeting different DPDK processes (e.g., OVS and testpmd). Each instance uses its tool `id` as the metric source name.
+
+| Instance ID | Source Name | Target Process |
+|-------------|-------------|----------------|
+| `ebpf-dpdk-ovs` | `ebpf-dpdk-ovs` | OVS vSwitch PMD threads |
+| `ebpf-dpdk-testpmd` | `ebpf-dpdk-testpmd` | testpmd forwarding threads |
+
+Profiles use `source: "ebpf-dpdk*"` to match all instances, and the engine reports each instance separately.
+
 | Metric Type | Description | Names |
 |-------------|-------------|-------|
 | top-function-pct | Hottest function % of samples | function |
 | top1-function-pct through top5-function-pct | Ranked top 5 | function |
 | perf-samples | Total sample count | (aggregate) |
+| perf-samples-active | Samples during active traffic window | (aggregate) |
 
 ### 12.7 nvidia (ilab, pytorch -- Future)
 

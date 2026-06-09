@@ -174,7 +174,7 @@ tool_correlations:
 
   # ---- ebpf-dpdk PMD profiling ----
   - tool: "ebpf-dpdk"
-    source: "ebpf-dpdk"
+    source: "ebpf-dpdk*"
     condition: "tool_present"
     metrics:
       - type: "top-function-pct"
@@ -184,8 +184,36 @@ tool_correlations:
           names: ["function"]
         thresholds: {}
 
+      - type: "top1-function-pct"
+        label: "PMD Top1 Function %"
+        aggregation: "max"
+        filter:
+          names: ["function"]
+        thresholds: {}
+
+      - type: "top2-function-pct"
+        label: "PMD Top2 Function %"
+        aggregation: "max"
+        filter:
+          names: ["function"]
+        thresholds: {}
+
+      - type: "top3-function-pct"
+        label: "PMD Top3 Function %"
+        aggregation: "max"
+        filter:
+          names: ["function"]
+        thresholds: {}
+
       - type: "perf-samples"
         label: "Perf Samples"
+        aggregation: "sum"
+        filter:
+          names: []
+        thresholds: {}
+
+      - type: "perf-samples-active"
+        label: "Perf Samples (Active Traffic)"
         aggregation: "sum"
         filter:
           names: []

@@ -69,7 +69,7 @@ python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/latest --format summa
 | **dpdk** | dpdk | rx-missed-sec, rx/tx-pps, rx/tx-Gbps, mempool-used-pct, queue-pps, xstats | trafficgen (all datapaths) |
 | **ovs** | ovs-pmd, ovs-dpctl, ovs-ofctl, ovs-appctl | pmd-busy, kpps, lookups-sec, flows-count, upcall-flow, errors-sec, Gbps | trafficgen (OVS-DPDK only) |
 | **ethtool** | ethtool | packets-sec, bytes-sec, errors-sec, dropped-sec (+ dynamic NIC counters) | trafficgen (all datapaths) |
-| **ebpf-dpdk** | ebpf-dpdk | top-function-pct, perf-samples | trafficgen (all datapaths) |
+| **ebpf-dpdk** | ebpf-dpdk-ovs, ebpf-dpdk-testpmd, etc. | top-function-pct, top1..top5-function-pct, perf-samples, perf-samples-active | trafficgen (all datapaths) |
 
 ### Future Tool Support (Planned)
 
@@ -100,6 +100,11 @@ python3 bin/analyze-run.py --run-dir /var/lib/crucible/run/latest --format summa
 | ftrace | -- | -- | -- | -- | planned | planned | -- | -- |
 
 `v1` = shipped. `planned` = on roadmap. `--` = not applicable.
+
+## Example Reports
+
+- [Single-run STL + OVS-DPDK](examples/single-run-stl-ovsdpdk.md) -- Full analysis with per-instance ebpf-dpdk profiling (OVS + testpmd), DPDK NIC telemetry, OVS datapath stats, and pattern detection
+- [Comparison ASTF + OVS-DPDK](examples/comparison-astf-ovsdpdk.md) -- Two-run comparison showing delta computation, regression/improvement flagging, and cross-tool alerts
 
 ## Documentation
 
