@@ -73,7 +73,7 @@ primary_metrics:
 tool_correlations:
   # ---- DPDK NIC telemetry ----
   - tool: "dpdk"
-    source: "dpdk"
+    source: "dpdk*"
     condition: "tool_present"
     metrics:
       - type: "rx-missed-sec"
@@ -442,11 +442,11 @@ patterns:
       DPDK memory pool utilization is critically high while packets are
       being dropped at the NIC level.
     conditions:
-      - source: "dpdk"
+      - source: "dpdk*"
         type: "mempool-used-pct"
         check: "any_above"
         value: 90
-      - source: "dpdk"
+      - source: "dpdk*"
         type: "rx-missed-sec"
         check: "mean_above"
         value: 0

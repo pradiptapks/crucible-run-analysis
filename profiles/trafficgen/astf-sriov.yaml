@@ -114,7 +114,7 @@ primary_metrics:
 tool_correlations:
   # ---- DPDK NIC telemetry (primary visibility for SR-IOV) ----
   - tool: "dpdk"
-    source: "dpdk"
+    source: "dpdk*"
     condition: "tool_present"
     metrics:
       - type: "rx-missed-sec"
@@ -269,7 +269,7 @@ patterns:
       DPDK is reporting missed RX packets on the VF, indicating the NIC
       ring buffer or VF queue is exhausted under load.
     conditions:
-      - source: "dpdk"
+      - source: "dpdk*"
         type: "rx-missed-sec"
         check: "mean_above"
         value: 0
@@ -329,7 +329,7 @@ patterns:
       DPDK memory pool utilization is critically high, indicating buffer
       exhaustion which causes packet drops.
     conditions:
-      - source: "dpdk"
+      - source: "dpdk*"
         type: "mempool-used-pct"
         check: "any_above"
         value: 90
@@ -347,7 +347,7 @@ patterns:
         type: "dropped-sec"
         check: "sum_above"
         value: 0
-      - source: "dpdk"
+      - source: "dpdk*"
         type: "rx-missed-sec"
         check: "mean_above"
         value: 0

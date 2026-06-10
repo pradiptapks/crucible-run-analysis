@@ -518,75 +518,70 @@ def resolve_profile(profiles_dir, benchmark, tags, tools, profile_name=None):
 # Phase 3 - Metric Loading
 # ---------------------------------------------------------------------------
 
+def _resolve_metric_csv_path(json_path):
+    csv_path = json_path.replace(".json", ".csv.xz")
+    if not os.path.exists(csv_path):
+        csv_path = json_path.replace(".json", ".csv")
+    return csv_path
+
+
+def _load_descriptors_from_json(path):
+    data = load_json_auto(path)
+    if not data:
+        return []
+
+    csv_path = _resolve_metric_csv_path(path)
+    entries = data if isinstance(data, list) else [data]
+    for entry in entries:
+        entry["_csv_path"] = csv_path
+        entry["_source_path"] = path
+    return entries
+
+
+def _benchmark_measurement_patterns(run_dir, role):
+    base = os.path.join(run_dir, "run", "iterations", "iteration-*",
+                        "sample-*", role, "*")
+    return [
+        os.path.join(base, "postprocess", "metric-data-measurement.*"),
+        os.path.join(base, "metric-data-measurement.*"),
+    ]
+
+
 def load_benchmark_results(run_dir):
     descriptors = []
-    pattern = os.path.join(run_dir, "run", "iterations", "iteration-*", "sample-*",
-                           "client", "*", "metric-data-measurement.*")
-    for path in sorted(glob.glob(pattern)):
-        if path.endswith(".json"):
-            data = load_json_auto(path)
-            if data and isinstance(data, list):
-                csv_path = path.replace(".json", ".csv.xz")
-                if not os.path.exists(csv_path):
-                    csv_path = path.replace(".json", ".csv")
-                for entry in data:
-                    entry["_csv_path"] = csv_path
-                    entry["_source_path"] = path
-                descriptors.extend(data)
-            elif data and isinstance(data, dict):
-                csv_path = path.replace(".json", ".csv.xz")
-                if not os.path.exists(csv_path):
-                    csv_path = path.replace(".json", ".csv")
-                data["_csv_path"] = csv_path
-                data["_source_path"] = path
-                descriptors.append(data)
+    seen_paths = set()
 
-    server_pattern = os.path.join(run_dir, "run", "iterations", "iteration-*", "sample-*",
-                                  "server", "*", "metric-data-measurement.*")
-    for path in sorted(glob.glob(server_pattern)):
-        if path.endswith(".json"):
-            data = load_json_auto(path)
-            if data and isinstance(data, list):
-                csv_path = path.replace(".json", ".csv.xz")
-                if not os.path.exists(csv_path):
-                    csv_path = path.replace(".json", ".csv")
-                for entry in data:
-                    entry["_csv_path"] = csv_path
-                    entry["_source_path"] = path
-                descriptors.extend(data)
-            elif data and isinstance(data, dict):
-                csv_path = path.replace(".json", ".csv.xz")
-                if not os.path.exists(csv_path):
-                    csv_path = path.replace(".json", ".csv")
-                data["_csv_path"] = csv_path
-                data["_source_path"] = path
-                descriptors.append(data)
+    for role in ("client", "server"):
+        for pattern in _benchmark_measurement_patterns(run_dir, role):
+            for path in sorted(glob.glob(pattern)):
+                if not path.endswith(".json") or path in seen_paths:
+                    continue
+                seen_paths.add(path)
+                descriptors.extend(_load_descriptors_from_json(path))
 
     return descriptors
 
 
 def load_profiler_data(run_dir):
     descriptors = []
-    pattern = os.path.join(run_dir, "run", "iterations", "iteration-*", "sample-*",
-                           "*", "*", "metric-data-*.*")
-    for path in sorted(glob.glob(pattern)):
-        if not path.endswith(".json"):
-            continue
-        if "metric-data-measurement" in path:
-            continue
-        data = load_json_auto(path)
-        if not data:
-            continue
-        entries = data if isinstance(data, list) else [data]
-        for entry in entries:
-            source = entry.get("desc", {}).get("source", "")
-            if "profiler" in source.lower() or "trex-profiler" in source:
-                csv_path = path.replace(".json", ".csv.xz")
-                if not os.path.exists(csv_path):
-                    csv_path = path.replace(".json", ".csv")
-                entry["_csv_path"] = csv_path
-                entry["_source_path"] = path
-                descriptors.append(entry)
+    seen_paths = set()
+    base = os.path.join(run_dir, "run", "iterations", "iteration-*", "sample-*")
+    patterns = [
+        os.path.join(base, "*", "*", "postprocess", "metric-data-*.*"),
+        os.path.join(base, "*", "*", "metric-data-*.*"),
+    ]
+
+    for pattern in patterns:
+        for path in sorted(glob.glob(pattern)):
+            if not path.endswith(".json") or path in seen_paths:
+                continue
+            if "metric-data-measurement" in path:
+                continue
+            seen_paths.add(path)
+            for entry in _load_descriptors_from_json(path):
+                source = entry.get("desc", {}).get("source", "")
+                if "profiler" in source.lower() or "trex-profiler" in source:
+                    descriptors.append(entry)
 
     return descriptors
 
@@ -622,19 +617,19 @@ def discover_tool_instances(run_dir, tool_name):
 
 def load_metric_descriptors(instance_path):
     descriptors = []
-    pattern = os.path.join(instance_path, "metric-data-*.json")
-    for path in sorted(glob.glob(pattern)):
-        data = load_json_auto(path)
-        if not data:
+    seen_paths = set()
+    search_dirs = [os.path.join(instance_path, "postprocess"), instance_path]
+
+    for search_dir in search_dirs:
+        if not os.path.isdir(search_dir):
             continue
-        csv_path = path.replace(".json", ".csv.xz")
-        if not os.path.exists(csv_path):
-            csv_path = path.replace(".json", ".csv")
-        entries = data if isinstance(data, list) else [data]
-        for entry in entries:
-            entry["_csv_path"] = csv_path
-            entry["_source_path"] = path
-        descriptors.extend(entries)
+        pattern = os.path.join(search_dir, "metric-data-*.json")
+        for path in sorted(glob.glob(pattern)):
+            if path in seen_paths:
+                continue
+            seen_paths.add(path)
+            descriptors.extend(_load_descriptors_from_json(path))
+
     return descriptors
 
 
@@ -1509,7 +1504,7 @@ def run_full_analysis(run_dir, profiles_dir, profile_name=None):
                 break
 
     iteration_dirs = sorted(glob.glob(
-        os.path.join(run_dir, "iterations", "iteration-*")))
+        os.path.join(run_dir, "run", "iterations", "iteration-*")))
     num_iterations = len(iteration_dirs)
     num_samples = 0
     for it_dir in iteration_dirs:

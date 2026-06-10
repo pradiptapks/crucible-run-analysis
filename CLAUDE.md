@@ -36,7 +36,11 @@ The engine auto-detects the correct profile based on run-file.json tags and tool
 
 ### Glob Source Matching
 
-Profile `source` and `type` fields support glob patterns (`*`, `?`). This is required for multi-instance tools like ebpf-dpdk where the metric source name includes an instance suffix (e.g., `ebpf-dpdk-ovs`, `ebpf-dpdk-testpmd`). Use `source: "ebpf-dpdk*"` to match all instances. The engine automatically splits results per actual source, so each instance gets its own section in the report.
+Profile `source` and `type` fields support glob patterns (`*`, `?`). This is required for tools where the metric source name varies by deployment context:
+- **dpdk**: Source is `dpdk-ovs` or `dpdk-testpmd` (read from `engine-env.txt`), falling back to `dpdk` for legacy data. Use `source: "dpdk*"` to match all variants.
+- **ebpf-dpdk**: Source includes an instance suffix (e.g., `ebpf-dpdk-ovs`, `ebpf-dpdk-testpmd`). Use `source: "ebpf-dpdk*"` to match all instances.
+
+The engine automatically splits results per actual source, so each instance gets its own section in the report.
 
 Pattern conditions also support glob source matching for cross-tool anomaly detection.
 
