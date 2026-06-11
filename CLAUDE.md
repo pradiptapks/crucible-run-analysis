@@ -19,6 +19,7 @@ The project has two components:
 | `profiles/` | YAML analysis profiles organized by benchmark |
 | `profiles/_base.yaml` | Universal system metrics (sysstat, procstat) |
 | `profiles/trafficgen/` | Trafficgen profiles (astf-ovsdpdk, astf-sriov, stl-ovsdpdk, stl-sriov) |
+| `profiles/vllm/` | vLLM inference profiles (cpu-smoke, cpu-functional, gpu-full) |
 | `plugins/crucible-analysis/` | Claude plugin (SKILL.md, plugin.json) |
 | `examples/` | Sample analysis reports (single-run, comparison) |
 | `docs/` | Architecture and CLI reference documentation |
@@ -54,6 +55,14 @@ Pattern conditions also support glob source matching for cross-tool anomaly dete
 
 - OVS-DPDK: `ovs` present in tool-params.json
 - SR-IOV: `ovs` absent from tool-params.json
+
+## vLLM Tier Detection
+
+- `cpu-smoke`: Tag `tier=cpu-smoke` — mock server pipeline validation, no real inference
+- `cpu-functional`: Tag `tier=cpu-functional` — real vLLM CPU inference with small models
+- `gpu-full`: Tag `tier=gpu-full` — production GPU inference with nvidia tool correlations
+
+Primary metrics: `output-tokens-per-sec`, `requests-per-sec`, `total-tokens-per-sec`, TTFT/ITL/E2E latency percentiles (mean, p50, p90, p99). Source: `vllm`.
 
 ## Adding New Profiles
 

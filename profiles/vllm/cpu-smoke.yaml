@@ -1,0 +1,155 @@
+name: "vLLM CPU Smoke (Mock Server)"
+benchmark: "vllm"
+version: 2
+extends: "_base"
+
+match:
+  tags:
+    tier: "cpu-smoke"
+
+primary_metrics:
+  # ---- Throughput ----
+  - source: "vllm"
+    type: "output-tokens-per-sec"
+    label: "Output Tokens/sec (primary)"
+    class: "throughput"
+    thresholds:
+      warn_below: 10
+      critical_below: 1
+
+  - source: "vllm"
+    type: "requests-per-sec"
+    label: "Requests/sec"
+    class: "throughput"
+    thresholds:
+      warn_below: 0.5
+
+  - source: "vllm"
+    type: "total-tokens-per-sec"
+    label: "Total Tokens/sec"
+    class: "throughput"
+    thresholds: {}
+
+  # ---- Latency: Time to First Token ----
+  - source: "vllm"
+    type: "ttft-mean-msec"
+    label: "TTFT Mean (ms)"
+    class: "count"
+    thresholds:
+      warn_above: 500
+      critical_above: 2000
+
+  - source: "vllm"
+    type: "ttft-p50-msec"
+    label: "TTFT p50 (ms)"
+    class: "count"
+    thresholds: {}
+
+  - source: "vllm"
+    type: "ttft-p90-msec"
+    label: "TTFT p90 (ms)"
+    class: "count"
+    thresholds: {}
+
+  - source: "vllm"
+    type: "ttft-p99-msec"
+    label: "TTFT p99 (ms)"
+    class: "count"
+    thresholds:
+      warn_above: 1000
+      critical_above: 5000
+
+  # ---- Latency: Inter-Token Latency ----
+  - source: "vllm"
+    type: "itl-mean-msec"
+    label: "ITL Mean (ms)"
+    class: "count"
+    thresholds:
+      warn_above: 100
+      critical_above: 500
+
+  - source: "vllm"
+    type: "itl-p50-msec"
+    label: "ITL p50 (ms)"
+    class: "count"
+    thresholds: {}
+
+  - source: "vllm"
+    type: "itl-p90-msec"
+    label: "ITL p90 (ms)"
+    class: "count"
+    thresholds: {}
+
+  - source: "vllm"
+    type: "itl-p99-msec"
+    label: "ITL p99 (ms)"
+    class: "count"
+    thresholds:
+      warn_above: 200
+      critical_above: 1000
+
+  # ---- Latency: End-to-End ----
+  - source: "vllm"
+    type: "e2e-latency-mean-msec"
+    label: "E2E Latency Mean (ms)"
+    class: "count"
+    thresholds:
+      warn_above: 5000
+      critical_above: 30000
+
+  - source: "vllm"
+    type: "e2e-latency-p50-msec"
+    label: "E2E Latency p50 (ms)"
+    class: "count"
+    thresholds: {}
+
+  - source: "vllm"
+    type: "e2e-latency-p90-msec"
+    label: "E2E Latency p90 (ms)"
+    class: "count"
+    thresholds: {}
+
+  - source: "vllm"
+    type: "e2e-latency-p99-msec"
+    label: "E2E Latency p99 (ms)"
+    class: "count"
+    thresholds:
+      warn_above: 10000
+      critical_above: 60000
+
+tool_correlations: []
+
+profiler_correlations: []
+
+patterns:
+  - name: "Zero Throughput"
+    severity: "critical"
+    description: >
+      No output tokens were generated, indicating the inference pipeline
+      failed to produce any results.
+    conditions:
+      - source: "vllm"
+        type: "output-tokens-per-sec"
+        check: "mean_below"
+        value: 1
+    recommendation: >
+      Check vllm-server-stderrout.txt and vllm-client-stderrout.txt
+      for errors. Verify the server started and the client connected.
+
+  - name: "Memory Pressure During Inference"
+    severity: "warning"
+    description: >
+      System is paging out memory during the test, which can cause
+      latency spikes in inference serving.
+    conditions:
+      - source: "sar-mem"
+        type: "Memory-Used-Percent"
+        check: "mean_above"
+        value: 90
+      - source: "sar-mem"
+        type: "KB-Paged-out-sec"
+        check: "mean_above"
+        value: 1000
+    recommendation: >
+      Reduce model size, use quantization, or increase system RAM.
+      Check for memory leaks in the inference server.

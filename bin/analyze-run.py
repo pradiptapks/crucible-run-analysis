@@ -544,6 +544,7 @@ def _benchmark_measurement_patterns(run_dir, role):
     return [
         os.path.join(base, "postprocess", "metric-data-measurement.*"),
         os.path.join(base, "metric-data-measurement.*"),
+        os.path.join(base, "postprocess", "metric-data-*.*"),
     ]
 
 

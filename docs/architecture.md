@@ -140,6 +140,14 @@ flowchart TD
 | `ovs` in tool list | OVS-DPDK |
 | `ovs` absent from tool list | SR-IOV |
 
+#### vllm Detection
+
+| Profile | Detection Tag | Tool Signals |
+|---------|--------------|--------------|
+| `cpu-smoke` | `tier=cpu-smoke` | sysstat, procstat |
+| `cpu-functional` | `tier=cpu-functional` | sysstat, procstat |
+| `gpu-full` | `tier=gpu-full` | sysstat, procstat, nvidia |
+
 #### Future Benchmark Detection
 
 The engine is designed to support additional benchmarks without code changes. Each benchmark's auto-detection is driven entirely by profile `match` rules:
@@ -191,6 +199,10 @@ profiles/
 │   ├── astf-sriov.yaml
 │   ├── stl-ovsdpdk.yaml
 │   └── stl-sriov.yaml
+├── vllm/                          # v1 -- LLM inference
+│   ├── cpu-smoke.yaml
+│   ├── cpu-functional.yaml
+│   └── gpu-full.yaml
 ├── fio/                            # Future: block storage
 │   ├── random-io.yaml
 │   └── sequential-io.yaml
@@ -540,7 +552,25 @@ patterns:
 | `stl-ovsdpdk` | trex-txrx / trex-txrx-profile | OVS-DPDK | rx-pps | dpdk, ovs, ethtool, ebpf-dpdk + profiler |
 | `stl-sriov` | trex-txrx / trex-txrx-profile | SR-IOV | rx-pps | dpdk, ethtool, ebpf-dpdk + profiler |
 
-### 10.2 fio (Planned)
+### 10.2 vllm (v1 -- Current)
+
+| Profile | Tier | Primary KPI | Key Tool Correlations |
+|---------|------|-------------|----------------------|
+| `cpu-smoke` | cpu-smoke (mock server) | output-tokens-per-sec, TTFT, ITL, E2E latency | sysstat, procstat |
+| `cpu-functional` | cpu-functional (real vLLM CPU) | output-tokens-per-sec, TTFT, ITL, E2E latency | sysstat, procstat |
+| `gpu-full` | gpu-full (production GPU) | output-tokens-per-sec, TTFT, ITL, E2E latency | nvidia (GPU util, memory, power, SM clock), sysstat, procstat |
+
+15 primary metrics per profile covering throughput (output-tokens/sec, requests/sec, total-tokens/sec) and latency percentiles (TTFT, ITL, E2E at mean/p50/p90/p99).
+
+Patterns to detect:
+- Zero throughput (inference pipeline failure)
+- GPU memory exhaustion (gpu-full only)
+- GPU saturation with latency spike (gpu-full only)
+- Thermal throttling (gpu-full only)
+- CPU saturation (cpu-functional only)
+- Memory pressure during inference (all tiers)
+
+### 10.3 fio (Planned)
 
 | Profile | Workload | Primary KPI | Key Tool Correlations |
 |---------|----------|-------------|----------------------|

@@ -1,0 +1,239 @@
+name: "vLLM GPU Full (Production)"
+benchmark: "vllm"
+version: 2
+extends: "_base"
+
+match:
+  tags:
+    tier: "gpu-full"
+
+primary_metrics:
+  # ---- Throughput ----
+  - source: "vllm"
+    type: "output-tokens-per-sec"
+    label: "Output Tokens/sec (primary)"
+    class: "throughput"
+    thresholds:
+      warn_below: 100
+      critical_below: 10
+
+  - source: "vllm"
+    type: "requests-per-sec"
+    label: "Requests/sec"
+    class: "throughput"
+    thresholds:
+      warn_below: 1
+
+  - source: "vllm"
+    type: "total-tokens-per-sec"
+    label: "Total Tokens/sec"
+    class: "throughput"
+    thresholds: {}
+
+  # ---- Latency: Time to First Token ----
+  - source: "vllm"
+    type: "ttft-mean-msec"
+    label: "TTFT Mean (ms)"
+    class: "count"
+    thresholds:
+      warn_above: 200
+      critical_above: 1000
+
+  - source: "vllm"
+    type: "ttft-p50-msec"
+    label: "TTFT p50 (ms)"
+    class: "count"
+    thresholds: {}
+
+  - source: "vllm"
+    type: "ttft-p90-msec"
+    label: "TTFT p90 (ms)"
+    class: "count"
+    thresholds:
+      warn_above: 300
+      critical_above: 1500
+
+  - source: "vllm"
+    type: "ttft-p99-msec"
+    label: "TTFT p99 (ms)"
+    class: "count"
+    thresholds:
+      warn_above: 500
+      critical_above: 2000
+
+  # ---- Latency: Inter-Token Latency ----
+  - source: "vllm"
+    type: "itl-mean-msec"
+    label: "ITL Mean (ms)"
+    class: "count"
+    thresholds:
+      warn_above: 30
+      critical_above: 100
+
+  - source: "vllm"
+    type: "itl-p50-msec"
+    label: "ITL p50 (ms)"
+    class: "count"
+    thresholds: {}
+
+  - source: "vllm"
+    type: "itl-p90-msec"
+    label: "ITL p90 (ms)"
+    class: "count"
+    thresholds: {}
+
+  - source: "vllm"
+    type: "itl-p99-msec"
+    label: "ITL p99 (ms)"
+    class: "count"
+    thresholds:
+      warn_above: 50
+      critical_above: 200
+
+  # ---- Latency: End-to-End ----
+  - source: "vllm"
+    type: "e2e-latency-mean-msec"
+    label: "E2E Latency Mean (ms)"
+    class: "count"
+    thresholds:
+      warn_above: 2000
+      critical_above: 10000
+
+  - source: "vllm"
+    type: "e2e-latency-p50-msec"
+    label: "E2E Latency p50 (ms)"
+    class: "count"
+    thresholds: {}
+
+  - source: "vllm"
+    type: "e2e-latency-p90-msec"
+    label: "E2E Latency p90 (ms)"
+    class: "count"
+    thresholds: {}
+
+  - source: "vllm"
+    type: "e2e-latency-p99-msec"
+    label: "E2E Latency p99 (ms)"
+    class: "count"
+    thresholds:
+      warn_above: 5000
+      critical_above: 30000
+
+tool_correlations:
+  # ---- NVIDIA GPU telemetry ----
+  - tool: "nvidia"
+    source: "nvidia"
+    condition: "tool_present"
+    metrics:
+      - type: "gpu-utilization"
+        label: "GPU Utilization %"
+        aggregation: "mean"
+        filter:
+          names: ["gpu_id"]
+        thresholds:
+          warn_above: 95
+
+      - type: "gpu-memory-used-pct"
+        label: "GPU Memory Used %"
+        aggregation: "max"
+        filter:
+          names: ["gpu_id"]
+        thresholds:
+          warn_above: 90
+          critical_above: 98
+
+      - type: "gpu-power-watts"
+        label: "GPU Power (W)"
+        aggregation: "mean"
+        filter:
+          names: ["gpu_id"]
+        thresholds: {}
+
+      - type: "sm-clock-mhz"
+        label: "SM Clock (MHz)"
+        aggregation: "mean"
+        filter:
+          names: ["gpu_id"]
+        thresholds: {}
+
+profiler_correlations: []
+
+patterns:
+  - name: "Zero Throughput"
+    severity: "critical"
+    description: >
+      No output tokens were generated, indicating the inference pipeline
+      failed to produce any results.
+    conditions:
+      - source: "vllm"
+        type: "output-tokens-per-sec"
+        check: "mean_below"
+        value: 1
+    recommendation: >
+      Check vllm-server-stderrout.txt and vllm-client-stderrout.txt
+      for errors. Verify the server started and the client connected.
+
+  - name: "GPU Memory Exhaustion"
+    severity: "critical"
+    description: >
+      GPU memory is near capacity, which can cause OOM errors or force
+      the inference engine to reduce batch sizes.
+    conditions:
+      - source: "nvidia"
+        type: "gpu-memory-used-pct"
+        check: "any_above"
+        value: 95
+    recommendation: >
+      Reduce max-model-len, use quantization (awq/gptq/fp8), or
+      increase tensor-parallel-size to spread across more GPUs.
+
+  - name: "GPU Saturation with Latency Spike"
+    severity: "warning"
+    description: >
+      GPU utilization is near 100% and TTFT p99 is elevated, indicating
+      the server is at capacity and requests are queuing.
+    conditions:
+      - source: "nvidia"
+        type: "gpu-utilization"
+        check: "mean_above"
+        value: 95
+      - source: "vllm"
+        type: "ttft-p99-msec"
+        check: "value_above"
+        value: 500
+    recommendation: >
+      Reduce offered request rate, add GPUs with tensor parallelism,
+      or use a smaller/quantized model.
+
+  - name: "Thermal Throttling"
+    severity: "warning"
+    description: >
+      GPU SM clock dropped significantly below baseline, suggesting
+      thermal or power throttling under sustained inference load.
+    conditions:
+      - source: "nvidia"
+        type: "gpu-power-watts"
+        check: "mean_above"
+        value: 250
+    recommendation: >
+      Check GPU cooling, airflow, and ambient temperature. Consider
+      reducing gpu-memory-utilization or lowering max-model-len.
+
+  - name: "Memory Pressure During Inference"
+    severity: "warning"
+    description: >
+      System is paging out memory during the test, which can cause
+      latency spikes in inference serving.
+    conditions:
+      - source: "sar-mem"
+        type: "Memory-Used-Percent"
+        check: "mean_above"
+        value: 90
+      - source: "sar-mem"
+        type: "KB-Paged-out-sec"
+        check: "mean_above"
+        value: 1000
+    recommendation: >
+      Reduce model size, use quantization, or increase system RAM.
+      CPU-side memory pressure can indirectly affect GPU inference
+      through KV-cache management and tokenization overhead.
